@@ -36,11 +36,12 @@ USER appuser
 EXPOSE 8080
 
 # Variables de entorno por defecto
+# GC serial + RAM acotada: el plan Free de Render es solo 512 MiB, ZGC no cabe
 ENV SPRING_PROFILES_ACTIVE=prod \
-    JAVA_OPTS="-XX:+UseZGC -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+    JAVA_OPTS="-XX:+UseSerialGC -XX:MaxRAMPercentage=45.0 -XX:InitialRAMPercentage=20.0 -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError"
 
-# Healthcheck usando Actuator
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+# Healthcheck usando Actuator (Render inyecta $PORT, ej. 10000)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=50s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider "http://localhost:${PORT:-8082}/actuator/health" || exit 1
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
