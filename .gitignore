@@ -1,0 +1,16 @@
+# Secrets
+.env
+.env.*
+
+# Build artifacts
+target/
+**/target/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+out/
+
+# OS
+.DS_Store
