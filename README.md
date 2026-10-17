@@ -199,5 +199,7 @@ docker compose logs -f onboarding-app
 ```
 
 - **Swagger UI / Documentación interactiva**: `http://localhost:8080/swagger-ui.html`
+  (branding propio con el logo del proyecto, favicon y paleta corporativa vía
+  `SwaggerUiBrandingTransformer` + `/custom-swagger.css`)
 - **Consola Keycloak**: `http://localhost:8081` (Admin: `admin` / `admin`)
 - **Health Check Actuator**: `http://localhost:8080/actuator/health`

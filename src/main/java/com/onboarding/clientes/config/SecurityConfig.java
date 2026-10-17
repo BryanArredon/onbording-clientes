@@ -50,6 +50,8 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**"
                         ).permitAll()
+                        // Recursos estaticos del branding de Swagger UI (logo y favicon)
+                        .requestMatchers("/logo.jpeg", "/favicon.png", "/custom-swagger.css").permitAll()
                         // Actuator health/metrics
                         .requestMatchers("/actuator/**").permitAll()
                         // Autenticacion
