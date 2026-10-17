@@ -21,6 +21,7 @@ import com.onboarding.clientes.cliente.domain.valueobject.Rfc;
 import com.onboarding.clientes.cliente.domain.valueobject.Telefono;
 import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.tiempo.Reloj;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -33,10 +34,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,6 +53,8 @@ class ServicioBajaClienteTest {
     private PublicadorEvento publicadorEvento;
     @Mock
     private Reloj reloj;
+    @Mock
+    private AutorizadorRecursos autorizador;
 
     private ServicioBajaCliente servicio;
     private final Instant momento = Instant.parse("2026-01-01T12:00:00Z");
@@ -57,7 +63,7 @@ class ServicioBajaClienteTest {
 
     @BeforeEach
     void setUp() {
-        servicio = new ServicioBajaCliente(clientes, publicadorEvento, reloj);
+        servicio = new ServicioBajaCliente(clientes, publicadorEvento, reloj, autorizador);
 
         UUID id = UUID.randomUUID();
         LocalDate nacimiento = LocalDate.of(1992, 8, 14);
@@ -104,5 +110,16 @@ class ServicioBajaClienteTest {
 
         assertThatThrownBy(() -> servicio.darDeBaja(id))
                 .isInstanceOf(ClienteNoEncontradoException.class);
+    }
+
+    @Test
+    @DisplayName("Debe denegar la baja si el recurso no pertenece al usuario autenticado")
+    void denegarBajaDeClienteAjeno() {
+        doThrow(new AccessDeniedException("denegado"))
+                .when(autorizador).exigePropietarioOAdministrador(clienteEjemplo.id());
+
+        assertThatThrownBy(() -> servicio.darDeBaja(clienteEjemplo.id()))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(clientes, never()).buscarPorId(any());
     }
 }

@@ -2,6 +2,7 @@ package com.onboarding.clientes.cliente.infrastructure.persistence.adapter;
 
 import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaUsuario;
 import com.onboarding.clientes.cliente.application.port.UsuarioRepositorio;
+import com.onboarding.clientes.cliente.domain.model.RolUsuario;
 import com.onboarding.clientes.cliente.domain.model.Usuario;
 import com.onboarding.clientes.cliente.domain.valueobject.Correo;
 import com.onboarding.clientes.cliente.infrastructure.persistence.entity.UsuarioEntity;
@@ -35,6 +36,7 @@ public class UsuarioRepositorioAdaptador implements UsuarioRepositorio {
         entity.setId(usuario.id());
         entity.setClienteId(usuario.clienteId());
         entity.setCorreoElectronico(usuario.correo().valor());
+        entity.setRol(usuario.rol().name());
         entity.setPasswordHash(usuario.hashContrasena());
         entity.setPinHash(usuario.hashPin());
         entity.setActivo(usuario.activo());
@@ -117,6 +119,7 @@ public class UsuarioRepositorioAdaptador implements UsuarioRepositorio {
                 u.getId(),
                 u.getClienteId(),
                 Correo.de(u.getCorreoElectronico()),
+                u.getRol() != null ? RolUsuario.valueOf(u.getRol()) : RolUsuario.CLIENTE,
                 u.getPasswordHash(),
                 u.getPinHash(),
                 u.isActivo(),

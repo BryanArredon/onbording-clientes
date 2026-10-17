@@ -1,21 +1,27 @@
 package com.onboarding.clientes.config;
 
+import com.onboarding.clientes.cliente.domain.model.RolUsuario;
+import com.onboarding.clientes.shared.seguridad.UsuarioAutenticado;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Filtro que intercepta las peticiones HTTP y autentica al usuario si se proporciona un JWT valido.
+ *
+ * <p>El principal instalado en el {@code SecurityContext} es {@link UsuarioAutenticado}: ademas del
+ * identificador del usuario incluye el cliente dueño de la sesion y el rol, que son los datos que
+ * {@code AutorizadorRecursos} usa para autorizar cada operacion (prevencion de IDOR).
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -40,18 +46,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
             String token = authHeader.substring(BEARER_PREFIX.length()).trim();
             try {
-                if (jwtTokenService.esTokenValido(token)) {
+                if (SecurityContextHolder.getContext().getAuthentication() == null
+                        && jwtTokenService.esTokenValido(token)) {
                     Claims claims = jwtTokenService.extraerClaims(token);
-                    String userId = claims.getSubject();
+                    UUID usuarioId = UUID.fromString(claims.getSubject());
+                    UUID clienteId = claims.get("clienteId", String.class) != null
+                            ? UUID.fromString(claims.get("clienteId", String.class))
+                            : null;
+                    RolUsuario rol = claims.get("rol", String.class) != null
+                            ? RolUsuario.valueOf(claims.get("rol", String.class))
+                            : rolDesdeAuthorities(claims);
 
-                    @SuppressWarnings("unchecked")
-                    List<String> roles = claims.get("roles", List.class);
-                    List<SimpleGrantedAuthority> authorities = roles != null
-                            ? roles.stream().map(SimpleGrantedAuthority::new).toList()
-                            : Collections.singletonList(new SimpleGrantedAuthority("ROLE_CLIENTE"));
-
+                    UsuarioAutenticado principal = new UsuarioAutenticado(usuarioId, clienteId, rol);
                     UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(userId, null, authorities);
+                            new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             } catch (Exception ignored) {
@@ -60,5 +69,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /** Compatibilidad con tokens antiguos: si no trae el claim {@code rol} lo deduce de {@code roles}. */
+    private static RolUsuario rolDesdeAuthorities(Claims claims) {
+        @SuppressWarnings("unchecked")
+        List<String> roles = claims.get("roles", List.class);
+        if (roles != null && roles.contains(RolUsuario.ADMIN.autoridad())) {
+            return RolUsuario.ADMIN;
+        }
+        return RolUsuario.CLIENTE;
     }
 }

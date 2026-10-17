@@ -5,6 +5,7 @@ import com.onboarding.clientes.cliente.domain.exception.ClienteNoEncontradoExcep
 import com.onboarding.clientes.cliente.domain.model.Cliente;
 import com.onboarding.clientes.shared.evento.EventoDominio;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.tiempo.Reloj;
 import java.time.Instant;
 import java.util.Map;
@@ -25,18 +26,22 @@ public class ServicioBajaCliente {
     private final ClienteRepositorio clientes;
     private final PublicadorEvento publicadorEvento;
     private final Reloj reloj;
+    private final AutorizadorRecursos autorizador;
 
     public ServicioBajaCliente(
             ClienteRepositorio clientes,
             PublicadorEvento publicadorEvento,
-            Reloj reloj) {
+            Reloj reloj,
+            AutorizadorRecursos autorizador) {
         this.clientes = clientes;
         this.publicadorEvento = publicadorEvento;
         this.reloj = reloj;
+        this.autorizador = autorizador;
     }
 
     @Transactional
     public void darDeBaja(UUID id) {
+        autorizador.exigePropietarioOAdministrador(id);
         Cliente cliente = clientes.buscarPorId(id)
                 .orElseThrow(() -> new ClienteNoEncontradoException(id));
 

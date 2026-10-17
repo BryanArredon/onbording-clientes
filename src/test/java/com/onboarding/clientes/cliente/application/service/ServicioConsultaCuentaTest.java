@@ -28,6 +28,7 @@ import com.onboarding.clientes.cliente.domain.valueobject.Telefono;
 import com.onboarding.clientes.config.PropiedadesOnboarding;
 import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.error.ErrorNegocio;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -47,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +56,8 @@ class ServicioConsultaCuentaTest {
 
     @Mock
     private CuentaRepositorio cuentas;
+    @Mock
+    private AutorizadorRecursos autorizador;
 
     private ServicioConsultaCuenta servicio;
     private final Instant momento = Instant.parse("2026-01-01T12:00:00Z");
@@ -70,7 +74,11 @@ class ServicioConsultaCuentaTest {
                 new PropiedadesOnboarding.Keycloak(false, "", "", "", "", null)
         );
 
-        servicio = new ServicioConsultaCuenta(cuentas, new ClienteMapeador(), props);
+        servicio = new ServicioConsultaCuenta(cuentas, new ClienteMapeador(), props, autorizador);
+
+        // Por defecto los tests actuan con un administrador sin alcance restringido
+        org.mockito.Mockito.lenient().when(autorizador.clienteIdPermitido()).thenReturn(null);
+        org.mockito.Mockito.lenient().when(autorizador.esAdministrador()).thenReturn(true);
 
         UUID id = UUID.randomUUID();
         LocalDate nacimiento = LocalDate.of(1992, 8, 14);
@@ -155,5 +163,36 @@ class ServicioConsultaCuentaTest {
     void buscarConNumeroInvalido() {
         assertThatThrownBy(() -> servicio.buscar(new ConsultaCuenta("12345", null, null, null, 10)))
                 .isInstanceOf(ErrorNegocio.class);
+    }
+
+    @Test
+    @DisplayName("Debe limitar la busqueda de cuentas al propio cliente cuando el rol no es ADMIN")
+    void buscarLimitadoAlClientePropio() {
+        UUID clientePropio = UUID.randomUUID();
+        org.mockito.Mockito.lenient().when(autorizador.clienteIdPermitido()).thenReturn(clientePropio);
+        org.mockito.Mockito.lenient().when(autorizador.esAdministrador()).thenReturn(false);
+
+        when(cuentas.buscar(any(CriteriosBusquedaCuenta.class), any(), anyInt()))
+                .thenReturn(List.of(cuentaEjemplo));
+
+        // Aun pidiendo el cliente de otro, los criterios quedan forzados al propio
+        servicio.buscar(new ConsultaCuenta(null, UUID.randomUUID(), true, null, 10));
+
+        verify(cuentas).buscar(
+                org.mockito.ArgumentMatchers.argThat(c -> clientePropio.equals(c.clienteId())),
+                any(),
+                anyInt());
+    }
+
+    @Test
+    @DisplayName("Debe denegar la consulta de una cuenta que pertenece a otro cliente")
+    void denegarConsultaDeCuentaAjena() {
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("denegado"))
+                .when(autorizador).exigePropietarioOAdministrador(cuentaEjemplo.clienteId());
+
+        when(cuentas.buscarPorNumero(any(NumeroCuenta.class))).thenReturn(Optional.of(cuentaEjemplo));
+
+        assertThatThrownBy(() -> servicio.consultarSaldo("0000000018"))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 }

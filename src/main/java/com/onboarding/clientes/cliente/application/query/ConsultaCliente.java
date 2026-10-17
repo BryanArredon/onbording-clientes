@@ -19,4 +19,10 @@ public record ConsultaCliente(
         LocalDate desde,
         LocalDate hasta,
         String cursor,
-        Integer limite) {}
+        Integer limite) {
+
+    /** Consulta sin filtros: el servicio la limita al cliente propio cuando el rol no es {@code ADMIN}. */
+    public static ConsultaCliente soloPropio(Boolean soloActivos, String cursor, Integer limite) {
+        return new ConsultaCliente(null, null, null, null, null, soloActivos, null, null, cursor, limite);
+    }
+}

@@ -29,6 +29,7 @@ import com.onboarding.clientes.cliente.domain.valueobject.Telefono;
 import com.onboarding.clientes.config.PropiedadesOnboarding;
 import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.error.DatoInvalidoException;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -49,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,6 +60,8 @@ class ServicioConsultaClienteTest {
     private ClienteRepositorio clientes;
     @Mock
     private CuentaRepositorio cuentas;
+    @Mock
+    private AutorizadorRecursos autorizador;
 
     private ServicioConsultaCliente servicio;
     private final Instant momento = Instant.parse("2026-01-01T12:00:00Z");
@@ -74,7 +78,11 @@ class ServicioConsultaClienteTest {
                 new PropiedadesOnboarding.Keycloak(false, "", "", "", "", null)
         );
 
-        servicio = new ServicioConsultaCliente(clientes, cuentas, new ClienteMapeador(), props);
+        servicio = new ServicioConsultaCliente(clientes, cuentas, new ClienteMapeador(), props, autorizador);
+
+        // Por defecto los tests actuan con un administrador sin alcance restringido
+        org.mockito.Mockito.lenient().when(autorizador.clienteIdPermitido()).thenReturn(null);
+        org.mockito.Mockito.lenient().when(autorizador.esAdministrador()).thenReturn(true);
 
         UUID id = UUID.randomUUID();
         LocalDate nacimiento = LocalDate.of(1992, 8, 14);
@@ -206,5 +214,37 @@ class ServicioConsultaClienteTest {
                 null, null, null, null, null, null,
                 LocalDate.of(2026, 2, 1), LocalDate.of(2026, 1, 1), null, 10)))
                 .isInstanceOf(DatoInvalidoException.class);
+    }
+
+    @Test
+    @DisplayName("Debe limitar la busqueda al propio cliente cuando el rol no es ADMIN")
+    void buscarLimitadoAlClientePropio() {
+        UUID clientePropio = UUID.randomUUID();
+        org.mockito.Mockito.lenient().when(autorizador.clienteIdPermitido()).thenReturn(clientePropio);
+        org.mockito.Mockito.lenient().when(autorizador.esAdministrador()).thenReturn(false);
+
+        when(clientes.buscar(any(CriteriosBusquedaCliente.class), any(), anyInt()))
+                .thenReturn(List.of(clienteEjemplo));
+
+        // Aun pidiendo otro id, los criterios quedan forzados al propio cliente
+        servicio.buscar(new ConsultaCliente(
+                UUID.randomUUID(), null, null, null, null, true, null, null, null, 10));
+
+        verify(clientes).buscar(
+                org.mockito.ArgumentMatchers.argThat(c -> clientePropio.equals(c.id())),
+                any(),
+                anyInt());
+    }
+
+    @Test
+    @DisplayName("Debe denegar la lectura de un cliente ajeno")
+    void denegarLecturaDeClienteAjeno() {
+        UUID ajeno = UUID.randomUUID();
+        when(clientes.buscarPorId(ajeno)).thenReturn(Optional.of(clienteEjemplo));
+        org.mockito.Mockito.doThrow(new org.springframework.security.access.AccessDeniedException("denegado"))
+                .when(autorizador).exigePropietarioOAdministrador(clienteEjemplo.id());
+
+        assertThatThrownBy(() -> servicio.buscarPorId(ajeno))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 }

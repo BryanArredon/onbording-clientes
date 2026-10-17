@@ -1,5 +1,6 @@
 package com.onboarding.clientes.cliente.application.dto;
 
+import com.onboarding.clientes.cliente.domain.model.RolUsuario;
 import com.onboarding.clientes.cliente.domain.valueobject.Correo;
 import java.time.Instant;
 import java.util.UUID;
@@ -15,6 +16,7 @@ public record UsuarioDto(
         UUID id,
         UUID clienteId,
         Correo correo,
+        RolUsuario rol,
         boolean activo,
         boolean tienePin,
         Instant ultimoAcceso,

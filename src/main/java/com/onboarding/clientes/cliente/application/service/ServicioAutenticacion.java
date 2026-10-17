@@ -20,6 +20,7 @@ import com.onboarding.clientes.config.PropiedadesOnboarding;
 import com.onboarding.clientes.shared.evento.EventoDominio;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
 import com.onboarding.clientes.shared.id.UuidV7;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.seguridad.GeneradorHash;
 import com.onboarding.clientes.shared.seguridad.PoliticaCredenciales;
 import com.onboarding.clientes.shared.tiempo.Reloj;
@@ -49,6 +50,7 @@ public class ServicioAutenticacion {
     private final PublicadorEvento publicadorEvento;
     private final Reloj reloj;
     private final PropiedadesOnboarding propiedades;
+    private final AutorizadorRecursos autorizador;
 
     public ServicioAutenticacion(
             UsuarioRepositorio usuarios,
@@ -57,7 +59,8 @@ public class ServicioAutenticacion {
             ClienteMapeador mapeador,
             PublicadorEvento publicadorEvento,
             Reloj reloj,
-            PropiedadesOnboarding propiedades) {
+            PropiedadesOnboarding propiedades,
+            AutorizadorRecursos autorizador) {
         this.usuarios = usuarios;
         this.generadorHash = generadorHash;
         this.jwtTokenService = jwtTokenService;
@@ -65,6 +68,7 @@ public class ServicioAutenticacion {
         this.publicadorEvento = publicadorEvento;
         this.reloj = reloj;
         this.propiedades = propiedades;
+        this.autorizador = autorizador;
     }
 
     @Transactional
@@ -113,11 +117,13 @@ public class ServicioAutenticacion {
                 "Bearer",
                 jwtTokenService.getDuracionAccesoSegundos(),
                 usuario.clienteId(),
-                usuario.id());
+                usuario.id(),
+                usuario.rol());
     }
 
     @Transactional(readOnly = true)
     public UsuarioDto obtenerPorId(UUID id) {
+        autorizador.exigeUsuarioPropietarioOAdministrador(id);
         return usuarios.buscarPorId(id)
                 .map(mapeador::aDto)
                 .orElseThrow(() -> new UsuarioNoEncontradoException(id));
@@ -126,17 +132,23 @@ public class ServicioAutenticacion {
     /**
      * Busqueda unificada de usuarios con filtros combinables: un unico punto de entrada para consultar
      * por id, correo, cliente asociado o estatus, en cualquier combinacion.
+     *
+     * <p>El alcance se limita siempre al propio usuario cuando el rol no es {@code ADMIN}, de modo que
+     * un cliente no puede enumerar ni descubrir usuarios de terceros (prevencion de IDOR por busqueda).
      */
     @Transactional(readOnly = true)
     public PaginaRespuesta<UsuarioDto> buscar(ConsultaUsuario consulta) {
         int limite = normalizarLimite(consulta.limite());
 
+        UUID idAlcance = autorizador.usuarioIdPermitido();
+        UUID clienteIdAlcance = autorizador.clienteIdPermitido();
+
         CriteriosBusquedaUsuario criterios = new CriteriosBusquedaUsuario(
-                consulta.id(),
+                idAlcance != null ? idAlcance : consulta.id(),
                 consulta.correo() != null && !consulta.correo().isBlank()
                         ? Correo.de(consulta.correo())
                         : null,
-                consulta.clienteId(),
+                clienteIdAlcance != null ? clienteIdAlcance : consulta.clienteId(),
                 consulta.activo());
 
         List<Usuario> elementos = usuarios.buscar(criterios, Cursor.decodificar(consulta.cursor()), limite);
@@ -157,6 +169,7 @@ public class ServicioAutenticacion {
 
     @Transactional
     public void cambiarContrasenia(ComandoCambiarPassword comando) {
+        autorizador.exigeUsuarioPropietarioOAdministrador(comando.usuarioId());
         Usuario usuario = usuarios.buscarPorId(comando.usuarioId())
                 .orElseThrow(() -> new UsuarioNoEncontradoException(comando.usuarioId()));
 

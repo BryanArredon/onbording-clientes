@@ -20,6 +20,7 @@ import com.onboarding.clientes.cliente.domain.valueobject.Telefono;
 import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.evento.EventoDominio;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.tiempo.Reloj;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -43,20 +44,24 @@ public class ServicioActualizacionCliente {
     private final ClienteMapeador mapeador;
     private final PublicadorEvento publicadorEvento;
     private final Reloj reloj;
+    private final AutorizadorRecursos autorizador;
 
     public ServicioActualizacionCliente(
             ClienteRepositorio clientes,
             ClienteMapeador mapeador,
             PublicadorEvento publicadorEvento,
-            Reloj reloj) {
+            Reloj reloj,
+            AutorizadorRecursos autorizador) {
         this.clientes = clientes;
         this.mapeador = mapeador;
         this.publicadorEvento = publicadorEvento;
         this.reloj = reloj;
+        this.autorizador = autorizador;
     }
 
     @Transactional
     public ClienteDetalle actualizar(UUID id, ComandoActualizarCliente comando) {
+        autorizador.exigePropietarioOAdministrador(id);
         Cliente cliente = clientes.buscarPorId(id)
                 .orElseThrow(() -> new ClienteNoEncontradoException(id));
 

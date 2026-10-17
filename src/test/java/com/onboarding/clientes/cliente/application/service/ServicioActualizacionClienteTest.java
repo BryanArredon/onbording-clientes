@@ -26,6 +26,7 @@ import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.error.CodigoError;
 import com.onboarding.clientes.shared.error.ErrorNegocio;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.tiempo.Reloj;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -39,10 +40,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +59,8 @@ class ServicioActualizacionClienteTest {
     private PublicadorEvento publicadorEvento;
     @Mock
     private Reloj reloj;
+    @Mock
+    private AutorizadorRecursos autorizador;
 
     private ServicioActualizacionCliente servicio;
     private final Instant momento = Instant.parse("2026-01-01T12:00:00Z");
@@ -63,7 +69,7 @@ class ServicioActualizacionClienteTest {
 
     @BeforeEach
     void setUp() {
-        servicio = new ServicioActualizacionCliente(clientes, new ClienteMapeador(), publicadorEvento, reloj);
+        servicio = new ServicioActualizacionCliente(clientes, new ClienteMapeador(), publicadorEvento, reloj, autorizador);
 
         UUID id = UUID.randomUUID();
         LocalDate nacimiento = LocalDate.of(1992, 8, 14);
@@ -188,5 +194,29 @@ class ServicioActualizacionClienteTest {
 
         assertThatThrownBy(() -> servicio.actualizar(id, comando))
                 .isInstanceOf(ClienteNoEncontradoException.class);
+    }
+
+    @Test
+    @DisplayName("Debe denegar la actualizacion si el recurso no pertenece al usuario autenticado")
+    void denegarActualizacionDeClienteAjeno() {
+        doThrow(new AccessDeniedException("denegado"))
+                .when(autorizador).exigePropietarioOAdministrador(clienteEjemplo.id());
+
+        ComandoActualizarCliente comando = new ComandoActualizarCliente(
+                clienteEjemplo.id(),
+                new ComandoActualizarCliente.Persona(
+                        "Alejandro", "David", "Morales", "Mendoza",
+                        LocalDate.of(1992, 8, 14),
+                        "MOMA920814HGTNRD04",
+                        "MOMA9208148X2",
+                        Sexo.HOMBRE, "Mexicana", EstadoCivil.SOLTERO),
+                new ComandoActualizarCliente.Contacto("alejandro.morales@fintechmail.com", "4181029384", null),
+                new ComandoActualizarCliente.Ubicacion("Calle", "1", null, "Col", "Mpio", "Gto", "37800", "México"),
+                new ComandoActualizarCliente.Laboral("Dev", "Co", new BigDecimal("30000.00"), "MXN")
+        );
+
+        assertThatThrownBy(() -> servicio.actualizar(clienteEjemplo.id(), comando))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(clientes, never()).buscarPorId(any());
     }
 }

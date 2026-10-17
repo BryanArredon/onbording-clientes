@@ -22,6 +22,9 @@ public class UsuarioEntity {
     @Column(name = "correo_electronico", length = 100, nullable = false)
     private String correoElectronico;
 
+    @Column(name = "rol", length = 20, nullable = false)
+    private String rol;
+
     @Column(name = "password_hash", length = 100, nullable = false)
     private String passwordHash;
 
@@ -57,6 +60,8 @@ public class UsuarioEntity {
     public void setClienteId(UUID clienteId) { this.clienteId = clienteId; }
     public String getCorreoElectronico() { return correoElectronico; }
     public void setCorreoElectronico(String correoElectronico) { this.correoElectronico = correoElectronico; }
+    public String getRol() { return rol; }
+    public void setRol(String rol) { this.rol = rol; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public String getPinHash() { return pinHash; }

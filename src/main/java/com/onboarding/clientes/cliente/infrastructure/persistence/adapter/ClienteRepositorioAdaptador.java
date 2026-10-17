@@ -7,6 +7,7 @@ import com.onboarding.clientes.cliente.domain.model.Cuenta;
 import com.onboarding.clientes.cliente.domain.model.Domicilio;
 import com.onboarding.clientes.cliente.domain.model.EstadoCivil;
 import com.onboarding.clientes.cliente.domain.model.EstatusCuenta;
+import com.onboarding.clientes.cliente.domain.model.RolUsuario;
 import com.onboarding.clientes.cliente.domain.model.Sexo;
 import com.onboarding.clientes.cliente.domain.model.TipoCuenta;
 import com.onboarding.clientes.cliente.domain.model.Usuario;
@@ -124,6 +125,7 @@ public class ClienteRepositorioAdaptador implements ClienteRepositorio {
             usuarioEntity.setId(u.id());
             usuarioEntity.setClienteId(cliente.id());
             usuarioEntity.setCorreoElectronico(u.correo().valor());
+            usuarioEntity.setRol(u.rol().name());
             usuarioEntity.setPasswordHash(u.hashContrasena());
             usuarioEntity.setPinHash(u.hashPin());
             usuarioEntity.setActivo(u.activo());
@@ -315,6 +317,7 @@ public class ClienteRepositorioAdaptador implements ClienteRepositorio {
                         u.getId(),
                         u.getClienteId(),
                         Correo.de(u.getCorreoElectronico()),
+                        u.getRol() != null ? RolUsuario.valueOf(u.getRol()) : RolUsuario.CLIENTE,
                         u.getPasswordHash(),
                         u.getPinHash(),
                         u.isActivo(),

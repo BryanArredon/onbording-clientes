@@ -29,6 +29,7 @@ public class Usuario {
     private final UUID id;
     private final UUID clienteId;
     private final Correo correo;
+    private final RolUsuario rol;
     private String hashContrasena;
     private String hashPin;
     private boolean activo;
@@ -43,6 +44,7 @@ public class Usuario {
             UUID id,
             UUID clienteId,
             Correo correo,
+            RolUsuario rol,
             String hashContrasena,
             String hashPin,
             boolean activo,
@@ -55,6 +57,7 @@ public class Usuario {
         this.id = id;
         this.clienteId = clienteId;
         this.correo = correo;
+        this.rol = rol != null ? rol : RolUsuario.CLIENTE;
         this.hashContrasena = hashContrasena;
         this.hashPin = hashPin;
         this.activo = activo;
@@ -66,16 +69,17 @@ public class Usuario {
         this.updatedAt = updatedAt;
     }
 
-    /** Crea el usuario en el alta del cliente: activo y sin PIN (el PIN es opcional). */
+    /** Crea el usuario en el alta del cliente: activo, rol {@code CLIENTE} y sin PIN (el PIN es opcional). */
     public static Usuario crear(UUID clienteId, Correo correo, String hashContrasena, String hashPin, Instant momento) {
         return new Usuario(
-                UuidV7.generar(), clienteId, correo, hashContrasena, hashPin, true, 0, null, null, null, momento, momento);
+                UuidV7.generar(), clienteId, correo, RolUsuario.CLIENTE, hashContrasena, hashPin, true, 0, null, null, null, momento, momento);
     }
 
     public static Usuario rehidratar(
             UUID id,
             UUID clienteId,
             Correo correo,
+            RolUsuario rol,
             String hashContrasena,
             String hashPin,
             boolean activo,
@@ -89,6 +93,7 @@ public class Usuario {
                 id,
                 clienteId,
                 correo,
+                rol,
                 hashContrasena,
                 hashPin,
                 activo,
@@ -181,6 +186,14 @@ public class Usuario {
 
     public Correo correo() {
         return correo;
+    }
+
+    public RolUsuario rol() {
+        return rol;
+    }
+
+    public boolean esAdministrador() {
+        return rol == RolUsuario.ADMIN;
     }
 
     public String hashContrasena() {

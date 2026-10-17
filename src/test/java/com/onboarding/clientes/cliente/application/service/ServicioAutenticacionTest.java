@@ -1,5 +1,6 @@
 package com.onboarding.clientes.cliente.application.service;
 
+import com.onboarding.clientes.cliente.application.command.ComandoCambiarPassword;
 import com.onboarding.clientes.cliente.application.command.ComandoLogin;
 import com.onboarding.clientes.cliente.application.dto.LoginRespuesta;
 import com.onboarding.clientes.cliente.application.dto.UsuarioDto;
@@ -13,7 +14,9 @@ import com.onboarding.clientes.cliente.domain.model.Usuario;
 import com.onboarding.clientes.cliente.domain.valueobject.Correo;
 import com.onboarding.clientes.config.JwtTokenService;
 import com.onboarding.clientes.config.PropiedadesOnboarding;
+import com.onboarding.clientes.cliente.domain.model.RolUsuario;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.seguridad.GeneradorHash;
 import com.onboarding.clientes.shared.tiempo.Reloj;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
@@ -28,13 +31,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -50,6 +58,8 @@ class ServicioAutenticacionTest {
     private PublicadorEvento publicadorEvento;
     @Mock
     private Reloj reloj;
+    @Mock
+    private AutorizadorRecursos autorizador;
 
     private ServicioAutenticacion servicio;
     private final Instant momento = Instant.parse("2026-01-01T12:00:00Z");
@@ -71,8 +81,13 @@ class ServicioAutenticacionTest {
                 new ClienteMapeador(),
                 publicadorEvento,
                 reloj,
-                props);
+                props,
+                autorizador);
 
+        // Por defecto los tests actuan con un administrador sin alcance restringido
+        lenient().when(autorizador.clienteIdPermitido()).thenReturn(null);
+        lenient().when(autorizador.usuarioIdPermitido()).thenReturn(null);
+        lenient().when(autorizador.esAdministrador()).thenReturn(true);
         lenient().when(reloj.ahora()).thenReturn(momento);
     }
 
@@ -146,5 +161,64 @@ class ServicioAutenticacionTest {
         assertThat(pagina.elementos()).hasSize(1);
         assertThat(pagina.elementos().get(0).correo()).isEqualTo(correo);
         assertThat(pagina.elementos().get(0).clienteId()).isEqualTo(clienteId);
+    }
+
+    @Test
+    @DisplayName("Debe limitar la busqueda al propio usuario cuando el rol no es ADMIN")
+    void buscarLimitadoAlClientePropio() {
+        UUID clientePropio = UUID.randomUUID();
+        UUID usuarioPropio = UUID.randomUUID();
+        Correo correo = Correo.de("propio@ejemplo.com");
+        Usuario usuario = Usuario.crear(clientePropio, correo, "$2a$12$hashedPassword", null, momento);
+
+        lenient().when(autorizador.usuarioIdPermitido()).thenReturn(usuarioPropio);
+        lenient().when(autorizador.clienteIdPermitido()).thenReturn(clientePropio);
+        lenient().when(autorizador.esAdministrador()).thenReturn(false);
+
+        when(usuarios.buscar(any(CriteriosBusquedaUsuario.class), any(), anyInt()))
+                .thenReturn(List.of(usuario));
+
+        // Aun pidiendo otro usuario, los criterios quedan forzados al propio
+        PaginaRespuesta<UsuarioDto> pagina = servicio.buscar(
+                new ConsultaUsuario(null, null, null, null, null, 10));
+
+        verify(usuarios).buscar(
+                argThat(c -> usuarioPropio.equals(c.id())
+                        && clientePropio.equals(c.clienteId())),
+                any(),
+                anyInt());
+        assertThat(pagina.elementos()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Debe denegar el cambio de contrasena de un usuario ajeno")
+    void denegarCambioContrasenaDeUsuarioAjeno() {
+        UUID ajeno = UUID.randomUUID();
+        doThrow(new AccessDeniedException("denegado"))
+                .when(autorizador).exigeUsuarioPropietarioOAdministrador(ajeno);
+
+        assertThatThrownBy(() -> servicio.cambiarContrasenia(
+                new ComandoCambiarPassword(ajeno, "Actual123!", "NuevaSegura123!")))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(usuarios, never()).buscarPorId(any());
+    }
+
+    @Test
+    @DisplayName("Debe devolver el rol del usuario en el resultado del login")
+    void loginDevuelveRol() {
+        UUID clienteId = UUID.randomUUID();
+        Correo correo = Correo.de("alejandro.morales@fintechmail.com");
+        Usuario usuario = Usuario.crear(clienteId, correo, "$2a$12$hashedPassword", null, momento);
+
+        when(usuarios.buscarPorCorreo(correo)).thenReturn(Optional.of(usuario));
+        when(generadorHash.coincide("Segura123!", "$2a$12$hashedPassword")).thenReturn(true);
+        when(jwtTokenService.generarAccessToken(any())).thenReturn("mocked.access.jwt");
+        when(jwtTokenService.generarRefreshToken(any(), any())).thenReturn("mocked.refresh.jwt");
+        when(jwtTokenService.getDuracionAccesoSegundos()).thenReturn(900L);
+
+        LoginRespuesta respuesta = servicio.login(
+                new ComandoLogin("alejandro.morales@fintechmail.com", "Segura123!", "127.0.0.1", "Postman"));
+
+        assertThat(respuesta.rol()).isEqualTo(RolUsuario.CLIENTE);
     }
 }

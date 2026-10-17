@@ -17,6 +17,7 @@ import com.onboarding.clientes.cliente.domain.valueobject.NumeroCuenta;
 import com.onboarding.clientes.cliente.domain.valueobject.Rfc;
 import com.onboarding.clientes.config.PropiedadesOnboarding;
 import com.onboarding.clientes.shared.error.DatoInvalidoException;
+import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
 import com.onboarding.clientes.shared.web.Cursor;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import java.time.Instant;
@@ -40,42 +41,45 @@ public class ServicioConsultaCliente {
     private final CuentaRepositorio cuentas;
     private final ClienteMapeador mapeador;
     private final PropiedadesOnboarding propiedades;
+    private final AutorizadorRecursos autorizador;
 
     public ServicioConsultaCliente(
             ClienteRepositorio clientes,
             CuentaRepositorio cuentas,
             ClienteMapeador mapeador,
-            PropiedadesOnboarding propiedades) {
+            PropiedadesOnboarding propiedades,
+            AutorizadorRecursos autorizador) {
         this.clientes = clientes;
         this.cuentas = cuentas;
         this.mapeador = mapeador;
         this.propiedades = propiedades;
+        this.autorizador = autorizador;
     }
 
     public ClienteDetalle buscarPorId(UUID id) {
         return clientes.buscarPorId(id)
-                .map(mapeador::aDetalle)
+                .map(this::detallar)
                 .orElseThrow(() -> new ClienteNoEncontradoException(id));
     }
 
     public ClienteDetalle buscarPorCurp(String curpTexto) {
         Curp curp = Curp.de(curpTexto);
         return clientes.buscarPorCurp(curp)
-                .map(mapeador::aDetalle)
+                .map(this::detallar)
                 .orElseThrow(() -> new ClienteNoEncontradoException("CURP " + curpTexto));
     }
 
     public ClienteDetalle buscarPorRfc(String rfcTexto) {
         Rfc rfc = Rfc.de(rfcTexto);
         return clientes.buscarPorRfc(rfc)
-                .map(mapeador::aDetalle)
+                .map(this::detallar)
                 .orElseThrow(() -> new ClienteNoEncontradoException("RFC " + rfcTexto));
     }
 
     public ClienteDetalle buscarPorCorreo(String correoTexto) {
         Correo correo = Correo.de(correoTexto);
         return clientes.buscarPorCorreo(correo)
-                .map(mapeador::aDetalle)
+                .map(this::detallar)
                 .orElseThrow(() -> new ClienteNoEncontradoException("correo " + correoTexto));
     }
 
@@ -86,7 +90,16 @@ public class ServicioConsultaCliente {
         return buscarPorId(cuenta.clienteId());
     }
 
+    /** Autoriza sobre el cliente dueño del recurso y solo entonces lo proyecta a DTO. */
+    private ClienteDetalle detallar(Cliente cliente) {
+        autorizador.exigePropietarioOAdministrador(cliente.id());
+        return mapeador.aDetalle(cliente);
+    }
+
     public PaginaRespuesta<ClienteResumen> listar(Cursor cursor, Integer limiteSolicitado, boolean soloActivos) {
+        if (!autorizador.esAdministrador()) {
+            return buscar(ConsultaCliente.soloPropio(soloActivos, cursor != null ? cursor.codificar() : null, limiteSolicitado));
+        }
         int limite = normalizarLimite(limiteSolicitado);
         List<Cliente> elementos = clientes.listar(cursor, limite, soloActivos);
         return PaginaRespuesta.construir(
@@ -98,10 +111,13 @@ public class ServicioConsultaCliente {
 
     public PaginaRespuesta<ClienteResumen> listarRegistradosEntre(
             LocalDate desde, LocalDate hasta, Cursor cursor, Integer limiteSolicitado) {
-        int limite = normalizarLimite(limiteSolicitado);
+        if (!autorizador.esAdministrador()) {
+            return buscar(ConsultaCliente.soloPropio(true, cursor != null ? cursor.codificar() : null, limiteSolicitado));
+        }
         ZoneId zone = ZoneId.of(ZONA_OPERATIVA);
         Instant inicio = desde.atStartOfDay(zone).toInstant();
         Instant fin = hasta.plusDays(1).atStartOfDay(zone).toInstant().minusNanos(1);
+        int limite = normalizarLimite(limiteSolicitado);
 
         List<Cliente> elementos = clientes.listarRegistradosEntre(inicio, fin, cursor, limite);
         return PaginaRespuesta.construir(
@@ -122,8 +138,10 @@ public class ServicioConsultaCliente {
         int limite = normalizarLimite(consulta.limite());
         validarRangoFechas(consulta.desde(), consulta.hasta());
 
+        UUID idAlcance = autorizador.clienteIdPermitido();
+
         CriteriosBusquedaCliente criterios = new CriteriosBusquedaCliente(
-                consulta.id(),
+                idAlcance != null ? idAlcance : consulta.id(),
                 aCurp(consulta.curp()),
                 aRfc(consulta.rfc()),
                 aCorreo(consulta.correo()),

@@ -161,6 +161,18 @@ sequenceDiagram
 | `POST` | `/usuarios/consulta` | Único endpoint de búsqueda de usuarios: id, correo, cliente asociado y estatus combinables | Autenticado |
 | `PUT` | `/usuarios/password` | Cambio de contraseña con validación de complejidad (id en el cuerpo) | Autenticado |
 
+### Autorización (prevención de IDOR)
+
+Todos los recursos identificados por UUID (cliente, usuario, cuenta) pasan por
+`AutorizadorRecursos` antes de leerse o modificarse:
+
+- El JWT instala como principal un `UsuarioAutenticado` con `usuarioId`, `clienteId` y `rol`.
+- El rol `CLIENTE` (por defecto, columna `usuario.rol`, migración `V3`) solo puede consultar y
+  modificar **sus propios** recursos; conocer el UUID de un tercero no basta (`403 ACCESO_DENEGADO`).
+- Las búsquedas (`/clientes/consulta`, `/usuarios/consulta`, `/cuentas/consulta`) se limitan
+  automáticamente al cliente propio cuando el rol no es `ADMIN`, aunque se pidan otros filtros.
+- El rol `ADMIN` (promovible con `UPDATE usuario SET rol='ADMIN'`) tiene alcance global.
+
 ---
 
 ## 🛠️ Ejecución y Pruebas

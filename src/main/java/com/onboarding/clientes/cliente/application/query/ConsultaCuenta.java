@@ -10,4 +10,10 @@ public record ConsultaCuenta(
         UUID clienteId,
         Boolean soloActivas,
         String cursor,
-        Integer limite) {}
+        Integer limite) {
+
+    /** Consulta sin filtros: el servicio la limita al cliente propio cuando el rol no es {@code ADMIN}. */
+    public static ConsultaCuenta soloPropias(String cursor, Integer limite) {
+        return new ConsultaCuenta(null, null, Boolean.TRUE, cursor, limite);
+    }
+}

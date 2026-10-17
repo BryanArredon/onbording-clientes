@@ -105,6 +105,7 @@ public class ClienteMapeador {
                 usuario.id(),
                 usuario.clienteId(),
                 usuario.correo(),
+                usuario.rol(),
                 usuario.activo(),
                 usuario.tienePin(),
                 usuario.ultimoAcceso(),

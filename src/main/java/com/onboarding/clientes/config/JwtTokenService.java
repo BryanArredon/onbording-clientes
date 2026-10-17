@@ -54,7 +54,8 @@ public class JwtTokenService {
                 .setExpiration(Date.from(expira))
                 .claim("clienteId", usuario.clienteId().toString())
                 .claim("correo", usuario.correo().valor())
-                .claim("roles", List.of("ROLE_CLIENTE"))
+                .claim("rol", usuario.rol().name())
+                .claim("roles", List.of(usuario.rol().autoridad()))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
