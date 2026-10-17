@@ -3,7 +3,9 @@ package com.onboarding.clientes.cliente.application.service;
 import com.onboarding.clientes.cliente.application.dto.CuentaDto;
 import com.onboarding.clientes.cliente.application.dto.SaldoCuentaDto;
 import com.onboarding.clientes.cliente.application.mapper.ClienteMapeador;
+import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaCuenta;
 import com.onboarding.clientes.cliente.application.port.CuentaRepositorio;
+import com.onboarding.clientes.cliente.application.query.ConsultaCuenta;
 import com.onboarding.clientes.cliente.domain.exception.CuentaNoEncontradaException;
 import com.onboarding.clientes.cliente.domain.model.Cuenta;
 import com.onboarding.clientes.cliente.domain.valueobject.NumeroCuenta;
@@ -55,6 +57,29 @@ public class ServicioConsultaCuenta {
     public PaginaRespuesta<CuentaDto> listarActivas(Cursor cursor, Integer limiteSolicitado) {
         int limite = normalizarLimite(limiteSolicitado);
         List<Cuenta> elementos = cuentas.listarActivas(cursor, limite);
+        return PaginaRespuesta.construir(
+                elementos,
+                limite,
+                mapeador::aDto,
+                cuenta -> new Cursor(cuenta.createdAt(), cuenta.id()));
+    }
+
+    /**
+     * Busqueda unificada de cuentas con filtros combinables: un unico punto de entrada para consultar
+     * por numero de cuenta o por cliente, con paginacion. La proyeccion de respuesta ya incluye el
+     * saldo disponible.
+     */
+    public PaginaRespuesta<CuentaDto> buscar(ConsultaCuenta consulta) {
+        int limite = normalizarLimite(consulta.limite());
+
+        CriteriosBusquedaCuenta criterios = new CriteriosBusquedaCuenta(
+                consulta.numeroCuenta() != null && !consulta.numeroCuenta().isBlank()
+                        ? NumeroCuenta.de(consulta.numeroCuenta())
+                        : null,
+                consulta.clienteId(),
+                consulta.soloActivas());
+
+        List<Cuenta> elementos = cuentas.buscar(criterios, Cursor.decodificar(consulta.cursor()), limite);
         return PaginaRespuesta.construir(
                 elementos,
                 limite,

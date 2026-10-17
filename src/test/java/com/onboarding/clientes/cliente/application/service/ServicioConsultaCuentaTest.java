@@ -3,7 +3,9 @@ package com.onboarding.clientes.cliente.application.service;
 import com.onboarding.clientes.cliente.application.dto.CuentaDto;
 import com.onboarding.clientes.cliente.application.dto.SaldoCuentaDto;
 import com.onboarding.clientes.cliente.application.mapper.ClienteMapeador;
+import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaCuenta;
 import com.onboarding.clientes.cliente.application.port.CuentaRepositorio;
+import com.onboarding.clientes.cliente.application.query.ConsultaCuenta;
 import com.onboarding.clientes.cliente.domain.exception.CuentaNoEncontradaException;
 import com.onboarding.clientes.cliente.domain.model.AltaCliente;
 import com.onboarding.clientes.cliente.domain.model.Cliente;
@@ -25,6 +27,7 @@ import com.onboarding.clientes.cliente.domain.valueobject.Rfc;
 import com.onboarding.clientes.cliente.domain.valueobject.Telefono;
 import com.onboarding.clientes.config.PropiedadesOnboarding;
 import com.onboarding.clientes.shared.dinero.Dinero;
+import com.onboarding.clientes.shared.error.ErrorNegocio;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -132,5 +135,25 @@ class ServicioConsultaCuentaTest {
         PaginaRespuesta<CuentaDto> pagina = servicio.listarActivas(null, 10);
         assertThat(pagina.elementos()).hasSize(1);
         assertThat(pagina.elementos().get(0).numero().valor()).isEqualTo("0000000018");
+    }
+
+    @Test
+    @DisplayName("Debe buscar cuentas combinando filtros en el endpoint unico de consulta")
+    void buscarCombinandoFiltros() {
+        when(cuentas.buscar(any(CriteriosBusquedaCuenta.class), any(), anyInt()))
+                .thenReturn(List.of(cuentaEjemplo));
+
+        PaginaRespuesta<CuentaDto> pagina = servicio.buscar(new ConsultaCuenta("0000000018", null, true, null, 10));
+
+        assertThat(pagina.elementos()).hasSize(1);
+        assertThat(pagina.elementos().get(0).numero().valor()).isEqualTo("0000000018");
+        assertThat(pagina.elementos().get(0).saldo()).isEqualByComparingTo("1500.50");
+    }
+
+    @Test
+    @DisplayName("Debe rechazar numero de cuenta con formato invalido en el endpoint unico de consulta")
+    void buscarConNumeroInvalido() {
+        assertThatThrownBy(() -> servicio.buscar(new ConsultaCuenta("12345", null, null, null, 10)))
+                .isInstanceOf(ErrorNegocio.class);
     }
 }

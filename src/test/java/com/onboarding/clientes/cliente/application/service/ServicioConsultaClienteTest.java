@@ -4,7 +4,9 @@ import com.onboarding.clientes.cliente.application.dto.ClienteDetalle;
 import com.onboarding.clientes.cliente.application.dto.ClienteResumen;
 import com.onboarding.clientes.cliente.application.mapper.ClienteMapeador;
 import com.onboarding.clientes.cliente.application.port.ClienteRepositorio;
+import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaCliente;
 import com.onboarding.clientes.cliente.application.port.CuentaRepositorio;
+import com.onboarding.clientes.cliente.application.query.ConsultaCliente;
 import com.onboarding.clientes.cliente.domain.exception.ClienteNoEncontradoException;
 import com.onboarding.clientes.cliente.domain.exception.CuentaNoEncontradaException;
 import com.onboarding.clientes.cliente.domain.model.AltaCliente;
@@ -26,6 +28,7 @@ import com.onboarding.clientes.cliente.domain.valueobject.Rfc;
 import com.onboarding.clientes.cliente.domain.valueobject.Telefono;
 import com.onboarding.clientes.config.PropiedadesOnboarding;
 import com.onboarding.clientes.shared.dinero.Dinero;
+import com.onboarding.clientes.shared.error.DatoInvalidoException;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -172,5 +175,36 @@ class ServicioConsultaClienteTest {
         PaginaRespuesta<ClienteResumen> pagina = servicio.listarRegistradosEntre(
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31), null, 10);
         assertThat(pagina.elementos()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Debe buscar clientes combinando filtros en el endpoint unico de consulta")
+    void buscarCombinandoFiltros() {
+        when(clientes.buscar(any(CriteriosBusquedaCliente.class), any(), anyInt()))
+                .thenReturn(List.of(clienteEjemplo));
+
+        PaginaRespuesta<ClienteResumen> pagina = servicio.buscar(new ConsultaCliente(
+                null, "MOMA920814HGTNRD04", null, null, null, true, null, null, null, 10));
+
+        assertThat(pagina.elementos()).hasSize(1);
+        assertThat(pagina.elementos().get(0).curp()).isEqualTo(clienteEjemplo.curp());
+        assertThat(pagina.elementos().get(0).nombreCompleto()).isEqualTo("Alejandro David Morales Mendoza");
+    }
+
+    @Test
+    @DisplayName("Debe rechazar CURP con formato invalido en el endpoint unico de consulta")
+    void buscarConCurpInvalida() {
+        assertThatThrownBy(() -> servicio.buscar(new ConsultaCliente(
+                null, "NO-EXISTE", null, null, null, null, null, null, null, 10)))
+                .isInstanceOf(Curp.CurpInvalidaException.class);
+    }
+
+    @Test
+    @DisplayName("Debe rechazar un rango de fechas invertido en el endpoint unico de consulta")
+    void buscarConRangoDeFechasInvertido() {
+        assertThatThrownBy(() -> servicio.buscar(new ConsultaCliente(
+                null, null, null, null, null, null,
+                LocalDate.of(2026, 2, 1), LocalDate.of(2026, 1, 1), null, 10)))
+                .isInstanceOf(DatoInvalidoException.class);
     }
 }

@@ -21,6 +21,7 @@ src/main/java/com/onboarding/clientes/
 │   │   ├── dto/
 │   │   ├── mapper/
 │   │   ├── port/
+│   │   ├── query/                 # Criterios de los endpoints unicos de busqueda
 │   │   └── service/
 │   ├── domain/                   # Núcleo de negocio inmutable (sin Spring / JPA)
 │   │   ├── exception/
@@ -137,8 +138,13 @@ sequenceDiagram
     Svc->>DB: Insertar Cliente, Domicilio, Usuario y Cuenta
     DB-->>Svc: Trigger asigna número de cuenta con dígito verificador Luhn
     Svc-->>API: ClienteDetalle (con cuenta y usuario)
-    API-->>Cliente: 201 Created + URI /clientes/{id}
+    API-->>Cliente: 201 Created + Location /clientes
 ```
+
+> La API no utiliza `@PathVariable` ni `@RequestParam`: los identificadores y los criterios de
+> búsqueda viajan siempre en el cuerpo de la petición, mediante Request DTOs validados con `@Valid`.
+> Los errores se resuelven de forma centralizada en `ManejadorExcepcionesGlobales`
+> (`@RestControllerAdvice`) y se devuelven como `ProblemDetail` (RFC 9457).
 
 ---
 
@@ -147,20 +153,13 @@ sequenceDiagram
 | Método | Endpoint | Descripción | Acceso |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/clientes` | Alta integral de cliente, domicilio, cuenta y usuario | Público |
-| `GET` | `/clientes` | Listar clientes (con paginación por cursor y filtros) | Autenticado |
-| `GET` | `/clientes/{id}` | Consultar cliente por ID (UUID v7) | Autenticado |
-| `GET` | `/clientes/curp/{curp}` | Consultar cliente por CURP | Autenticado |
-| `GET` | `/clientes/rfc/{rfc}` | Consultar cliente por RFC | Autenticado |
-| `GET` | `/clientes/correo/{correo}` | Consultar cliente por Correo Electrónico | Autenticado |
-| `GET` | `/clientes/cuenta/{numeroCuenta}` | Consultar cliente por Número de Cuenta | Autenticado |
-| `PUT` | `/clientes/{id}` | Actualizar cliente (Protección de inmutabilidad de CURP/RFC) | Autenticado |
-| `DELETE`| `/clientes/{id}` | Baja lógica de cliente (Inactiva cuentas y usuario en cascada) | Autenticado |
-| `GET` | `/cuentas/{numeroCuenta}` | Consultar información de una cuenta bancaria | Autenticado |
-| `GET` | `/cuentas/{numeroCuenta}/saldo` | Consultar saldo disponible de una cuenta | Autenticado |
-| `GET` | `/cuentas/activas` | Listar cuentas activas paginadas por cursor | Autenticado |
+| `POST` | `/clientes/consulta` | Único endpoint de búsqueda: id, CURP, RFC, correo, número de cuenta, estatus y rango de fechas combinables + paginación por cursor | Autenticado |
+| `PUT` | `/clientes` | Actualizar cliente (id en el cuerpo; protección de inmutabilidad de CURP/RFC) | Autenticado |
+| `DELETE`| `/clientes` | Baja lógica de cliente (id en el cuerpo; inactiva cuentas y usuario en cascada) | Autenticado |
+| `POST` | `/cuentas/consulta` | Único endpoint de búsqueda de cuentas (número de cuenta y/o cliente); la respuesta incluye el saldo disponible | Autenticado |
 | `POST` | `/auth/login` | Inicio de sesión con correo y contraseña (Emite JWT) | Público |
-| `GET` | `/usuarios/{id}` | Consultar usuario de acceso | Autenticado |
-| `PUT` | `/usuarios/{id}/password` | Cambio de contraseña con validación de complejidad | Autenticado |
+| `POST` | `/usuarios/consulta` | Único endpoint de búsqueda de usuarios: id, correo, cliente asociado y estatus combinables | Autenticado |
+| `PUT` | `/usuarios/password` | Cambio de contraseña con validación de complejidad (id en el cuerpo) | Autenticado |
 
 ---
 

@@ -1,22 +1,26 @@
 package com.onboarding.clientes.cliente.api;
 
+import com.onboarding.clientes.cliente.api.request.ConsultaCuentaRequest;
 import com.onboarding.clientes.cliente.application.dto.CuentaDto;
-import com.onboarding.clientes.cliente.application.dto.SaldoCuentaDto;
+import com.onboarding.clientes.cliente.application.query.ConsultaCuenta;
 import com.onboarding.clientes.cliente.application.service.ServicioConsultaCuenta;
-import com.onboarding.clientes.shared.web.Cursor;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.UUID;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Controlador REST para consultas de cuentas bancarias.
+ *
+ * <p>Sin {@code @PathVariable} ni {@code @RequestParam}: los criterios de busqueda viajan en el
+ * cuerpo de la peticion. La proyeccion de respuesta incluye el saldo disponible, por lo que existe
+ * un unico endpoint de consulta.
  */
 @RestController
 @RequestMapping("/cuentas")
@@ -29,25 +33,21 @@ public class CuentaController {
         this.servicioConsultaCuenta = servicioConsultaCuenta;
     }
 
-    @GetMapping("/{numeroCuenta}")
-    @Operation(summary = "Consultar cuenta por número")
-    public ResponseEntity<CuentaDto> buscarPorNumero(@PathVariable String numeroCuenta) {
-        return ResponseEntity.ok(servicioConsultaCuenta.buscarPorNumero(numeroCuenta));
-    }
+    @PostMapping("/consulta")
+    @Operation(
+            summary = "Consultar cuentas con filtros combinables",
+            description = "Un unico endpoint de busqueda: numero de cuenta y cliente titular pueden combinarse, con paginacion por cursor. La respuesta de cada cuenta incluye su saldo disponible.")
+    @ApiResponse(responseCode = "200", description = "Pagina de resultados (vacia si no hay coincidencias)")
+    @ApiResponse(responseCode = "400", description = "Criterios de busqueda invalidos")
+    public ResponseEntity<PaginaRespuesta<CuentaDto>> consultar(@Valid @RequestBody ConsultaCuentaRequest request) {
 
-    @GetMapping("/{numeroCuenta}/saldo")
-    @Operation(summary = "Consultar saldo disponible de una cuenta")
-    public ResponseEntity<SaldoCuentaDto> consultarSaldo(@PathVariable String numeroCuenta) {
-        return ResponseEntity.ok(servicioConsultaCuenta.consultarSaldo(numeroCuenta));
-    }
+        ConsultaCuenta consulta = new ConsultaCuenta(
+                request.numeroCuenta(),
+                request.clienteId(),
+                request.soloActivas(),
+                request.cursor(),
+                request.limite());
 
-    @GetMapping("/activas")
-    @Operation(summary = "Consultar lista de cuentas activas con paginación")
-    public ResponseEntity<PaginaRespuesta<CuentaDto>> listarActivas(
-            @RequestParam(required = false) String cursor,
-            @RequestParam(required = false) Integer limite) {
-
-        Cursor cursorObj = Cursor.decodificar(cursor);
-        return ResponseEntity.ok(servicioConsultaCuenta.listarActivas(cursorObj, limite));
+        return ResponseEntity.ok(servicioConsultaCuenta.buscar(consulta));
     }
 }

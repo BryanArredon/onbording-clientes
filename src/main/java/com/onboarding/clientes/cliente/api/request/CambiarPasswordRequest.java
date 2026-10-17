@@ -2,10 +2,15 @@ package com.onboarding.clientes.cliente.api.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.util.UUID;
 
 @Schema(description = "Solicitud para cambio de contraseña")
 public record CambiarPasswordRequest(
+        @NotNull(message = "El identificador del usuario es obligatorio")
+        @Schema(description = "Identificador único del usuario") UUID usuarioId,
+
         @NotBlank(message = "La contraseña actual es obligatoria")
         @Schema(example = "Segura123!")
         String contraseniaActual,

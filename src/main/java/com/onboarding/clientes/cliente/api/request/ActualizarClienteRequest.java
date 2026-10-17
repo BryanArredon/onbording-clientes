@@ -13,9 +13,13 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Schema(description = "Solicitud para actualizar información de un cliente existente")
 public record ActualizarClienteRequest(
+        @NotNull(message = "El identificador del cliente es obligatorio")
+        @Schema(description = "Identificador único del cliente a actualizar") UUID id,
+
         @Valid @NotNull PersonaUpdate persona,
         @Valid @NotNull ContactoUpdate contacto,
         @Valid @NotNull DomicilioUpdate ubicacion,

@@ -4,7 +4,9 @@ import com.onboarding.clientes.cliente.application.dto.ClienteDetalle;
 import com.onboarding.clientes.cliente.application.dto.ClienteResumen;
 import com.onboarding.clientes.cliente.application.mapper.ClienteMapeador;
 import com.onboarding.clientes.cliente.application.port.ClienteRepositorio;
+import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaCliente;
 import com.onboarding.clientes.cliente.application.port.CuentaRepositorio;
+import com.onboarding.clientes.cliente.application.query.ConsultaCliente;
 import com.onboarding.clientes.cliente.domain.exception.ClienteNoEncontradoException;
 import com.onboarding.clientes.cliente.domain.exception.CuentaNoEncontradaException;
 import com.onboarding.clientes.cliente.domain.model.Cliente;
@@ -14,6 +16,7 @@ import com.onboarding.clientes.cliente.domain.valueobject.Curp;
 import com.onboarding.clientes.cliente.domain.valueobject.NumeroCuenta;
 import com.onboarding.clientes.cliente.domain.valueobject.Rfc;
 import com.onboarding.clientes.config.PropiedadesOnboarding;
+import com.onboarding.clientes.shared.error.DatoInvalidoException;
 import com.onboarding.clientes.shared.web.Cursor;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import java.time.Instant;
@@ -106,6 +109,69 @@ public class ServicioConsultaCliente {
                 limite,
                 mapeador::aResumen,
                 cliente -> new Cursor(cliente.createdAt(), cliente.id()));
+    }
+
+    /**
+     * Busqueda unificada con filtros combinables: un unico punto de entrada para consultar por id,
+     * CURP, RFC, correo, numero de cuenta, estatus y rango de fechas, en cualquier combinacion.
+     *
+     * <p>Los textos recibidos se traducen a value objects de dominio antes de consultar, de modo que
+     * un filtro con formato invalido se rechaza con el error de negocio correspondiente.
+     */
+    public PaginaRespuesta<ClienteResumen> buscar(ConsultaCliente consulta) {
+        int limite = normalizarLimite(consulta.limite());
+        validarRangoFechas(consulta.desde(), consulta.hasta());
+
+        CriteriosBusquedaCliente criterios = new CriteriosBusquedaCliente(
+                consulta.id(),
+                aCurp(consulta.curp()),
+                aRfc(consulta.rfc()),
+                aCorreo(consulta.correo()),
+                aNumeroCuenta(consulta.numeroCuenta()),
+                consulta.soloActivos(),
+                aInicioDelDia(consulta.desde()),
+                aFinDelDia(consulta.hasta()));
+
+        List<Cliente> elementos = clientes.buscar(criterios, Cursor.decodificar(consulta.cursor()), limite);
+        return PaginaRespuesta.construir(
+                elementos,
+                limite,
+                mapeador::aResumen,
+                cliente -> new Cursor(cliente.createdAt(), cliente.id()));
+    }
+
+    private void validarRangoFechas(LocalDate desde, LocalDate hasta) {
+        if (desde != null && hasta != null && desde.isAfter(hasta)) {
+            throw new DatoInvalidoException(
+                    "El rango de fechas de consulta no es valido",
+                    List.of("desde: no puede ser posterior a hasta"));
+        }
+    }
+
+    private Curp aCurp(String texto) {
+        return texto != null && !texto.isBlank() ? Curp.de(texto) : null;
+    }
+
+    private Rfc aRfc(String texto) {
+        return texto != null && !texto.isBlank() ? Rfc.de(texto) : null;
+    }
+
+    private Correo aCorreo(String texto) {
+        return texto != null && !texto.isBlank() ? Correo.de(texto) : null;
+    }
+
+    private NumeroCuenta aNumeroCuenta(String texto) {
+        return texto != null && !texto.isBlank() ? NumeroCuenta.de(texto) : null;
+    }
+
+    private Instant aInicioDelDia(LocalDate fecha) {
+        return fecha == null ? null : fecha.atStartOfDay(ZoneId.of(ZONA_OPERATIVA)).toInstant();
+    }
+
+    private Instant aFinDelDia(LocalDate fecha) {
+        return fecha == null
+                ? null
+                : fecha.plusDays(1).atStartOfDay(ZoneId.of(ZONA_OPERATIVA)).toInstant().minusNanos(1);
     }
 
     private int normalizarLimite(Integer solicitado) {

@@ -29,4 +29,15 @@ public interface CuentaRepositorio {
     List<Cuenta> listarActivas(Cursor cursor, int limite);
 
     long contarPorEstatus(EstatusCuenta estatus);
+
+    /**
+     * Busqueda dinamica con filtros combinables: el adaptador construye la consulta unicamente con
+     * los criterios presentes.
+     *
+     * @param criterios criterios ya normalizados por el servicio
+     * @param cursor posicion previa, {@code null} para la primera pagina
+     * @param limite maximo de elementos (se pide {@code limite + 1} para detectar pagina siguiente)
+     * @return hasta {@code limite + 1} elementos ordenados del mas reciente al mas antiguo
+     */
+    List<Cuenta> buscar(CriteriosBusquedaCuenta criterios, Cursor cursor, int limite);
 }

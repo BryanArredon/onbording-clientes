@@ -1,5 +1,6 @@
 package com.onboarding.clientes.cliente.infrastructure.persistence.adapter;
 
+import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaCuenta;
 import com.onboarding.clientes.cliente.application.port.CuentaRepositorio;
 import com.onboarding.clientes.cliente.domain.model.Cuenta;
 import com.onboarding.clientes.cliente.domain.model.EstatusCuenta;
@@ -9,10 +10,14 @@ import com.onboarding.clientes.cliente.infrastructure.persistence.entity.CuentaE
 import com.onboarding.clientes.cliente.infrastructure.persistence.jpa.CuentaSpringDataRepository;
 import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.web.Cursor;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 
 /**
@@ -59,6 +64,46 @@ public class CuentaRepositorioAdaptador implements CuentaRepositorio {
     @Override
     public long contarPorEstatus(EstatusCuenta estatus) {
         return cuentaRepository.countByEstatus(estatus.name());
+    }
+
+    @Override
+    public List<Cuenta> buscar(CriteriosBusquedaCuenta criterios, Cursor cursor, int limite) {
+        PageRequest pageable = PageRequest.of(
+                0, limite + 1, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        List<CuentaEntity> entities =
+                cuentaRepository.findAll(especificacion(criterios, cursor), pageable).getContent();
+        return entities.stream().map(this::aDominio).toList();
+    }
+
+    /**
+     * Construye la clausula WHERE unicamente con los criterios presentes (consulta dinamica).
+     */
+    private Specification<CuentaEntity> especificacion(CriteriosBusquedaCuenta criterios, Cursor cursor) {
+        return (root, query, cb) -> {
+            List<Predicate> predicados = new ArrayList<>();
+
+            if (criterios.numero() != null) {
+                predicados.add(cb.equal(root.get("numeroCuenta"), criterios.numero().valor()));
+            }
+            if (criterios.clienteId() != null) {
+                predicados.add(cb.equal(root.get("clienteId"), criterios.clienteId()));
+            }
+            if (Boolean.TRUE.equals(criterios.soloActivas())) {
+                predicados.add(cb.equal(root.get("estatus"), EstatusCuenta.ACTIVA.name()));
+            }
+            if (Boolean.FALSE.equals(criterios.soloActivas())) {
+                predicados.add(cb.notEqual(root.get("estatus"), EstatusCuenta.ACTIVA.name()));
+            }
+            if (cursor != null) {
+                predicados.add(cb.or(
+                        cb.lessThan(root.get("createdAt"), cursor.marcaTiempo()),
+                        cb.and(
+                                cb.equal(root.get("createdAt"), cursor.marcaTiempo()),
+                                cb.lessThan(root.get("id"), cursor.id()))));
+            }
+
+            return cb.and(predicados.toArray(new Predicate[0]));
+        };
     }
 
     private Cuenta aDominio(CuentaEntity c) {

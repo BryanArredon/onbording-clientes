@@ -2,8 +2,11 @@ package com.onboarding.clientes.cliente.application.service;
 
 import com.onboarding.clientes.cliente.application.command.ComandoLogin;
 import com.onboarding.clientes.cliente.application.dto.LoginRespuesta;
+import com.onboarding.clientes.cliente.application.dto.UsuarioDto;
 import com.onboarding.clientes.cliente.application.mapper.ClienteMapeador;
+import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaUsuario;
 import com.onboarding.clientes.cliente.application.port.UsuarioRepositorio;
+import com.onboarding.clientes.cliente.application.query.ConsultaUsuario;
 import com.onboarding.clientes.cliente.domain.exception.CredencialesInvalidasException;
 import com.onboarding.clientes.cliente.domain.exception.UsuarioInactivoException;
 import com.onboarding.clientes.cliente.domain.model.Usuario;
@@ -13,8 +16,10 @@ import com.onboarding.clientes.config.PropiedadesOnboarding;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
 import com.onboarding.clientes.shared.seguridad.GeneradorHash;
 import com.onboarding.clientes.shared.tiempo.Reloj;
+import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,7 +32,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,7 +73,7 @@ class ServicioAutenticacionTest {
                 reloj,
                 props);
 
-        when(reloj.ahora()).thenReturn(momento);
+        lenient().when(reloj.ahora()).thenReturn(momento);
     }
 
     @Test
@@ -121,5 +128,23 @@ class ServicioAutenticacionTest {
 
         assertThatThrownBy(() -> servicio.login(comando))
                 .isInstanceOf(UsuarioInactivoException.class);
+    }
+
+    @Test
+    @DisplayName("Debe buscar usuarios combinando filtros en el endpoint unico de consulta")
+    void buscarUsuariosCombinandoFiltros() {
+        UUID clienteId = UUID.randomUUID();
+        Correo correo = Correo.de("alejandro.morales@fintechmail.com");
+        Usuario usuario = Usuario.crear(clienteId, correo, "$2a$12$hashedPassword", null, momento);
+
+        when(usuarios.buscar(any(CriteriosBusquedaUsuario.class), any(), anyInt()))
+                .thenReturn(List.of(usuario));
+
+        PaginaRespuesta<UsuarioDto> pagina = servicio.buscar(
+                new ConsultaUsuario(null, "alejandro.morales@fintechmail.com", null, true, null, 10));
+
+        assertThat(pagina.elementos()).hasSize(1);
+        assertThat(pagina.elementos().get(0).correo()).isEqualTo(correo);
+        assertThat(pagina.elementos().get(0).clienteId()).isEqualTo(clienteId);
     }
 }

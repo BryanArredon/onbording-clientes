@@ -1,6 +1,7 @@
 package com.onboarding.clientes.cliente.infrastructure.persistence.adapter;
 
 import com.onboarding.clientes.cliente.application.port.ClienteRepositorio;
+import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaCliente;
 import com.onboarding.clientes.cliente.domain.model.Cliente;
 import com.onboarding.clientes.cliente.domain.model.Cuenta;
 import com.onboarding.clientes.cliente.domain.model.Domicilio;
@@ -27,12 +28,17 @@ import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.web.Cursor;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 
 /**
@@ -206,6 +212,69 @@ public class ClienteRepositorioAdaptador implements ClienteRepositorio {
                     desde, hasta, cursor.marcaTiempo(), cursor.id(), pageable);
         }
         return entities.stream().map(this::reconstruir).toList();
+    }
+
+    @Override
+    public List<Cliente> buscar(CriteriosBusquedaCliente criterios, Cursor cursor, int limite) {
+        PageRequest pageable = PageRequest.of(
+                0, limite + 1, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        List<ClienteEntity> entities =
+                clienteRepository.findAll(especificacion(criterios, cursor), pageable).getContent();
+        return entities.stream().map(this::reconstruir).toList();
+    }
+
+    /**
+     * Construye la clausula WHERE unicamente con los criterios presentes (consulta dinamica): la misma
+     * implementacion atiende la busqueda por identificador exacto, la combinacion de varios filtros y
+     * el listado paginado por cursor.
+     */
+    private Specification<ClienteEntity> especificacion(CriteriosBusquedaCliente criterios, Cursor cursor) {
+        return (root, query, cb) -> {
+            List<Predicate> predicados = new ArrayList<>();
+
+            if (criterios.id() != null) {
+                predicados.add(cb.equal(root.get("id"), criterios.id()));
+            }
+            if (criterios.curp() != null) {
+                predicados.add(cb.equal(root.get("curp"), criterios.curp().valor()));
+            }
+            if (criterios.rfc() != null) {
+                predicados.add(cb.equal(root.get("rfc"), criterios.rfc().valor()));
+            }
+            if (criterios.correo() != null) {
+                predicados.add(cb.equal(cb.lower(root.get("correoElectronico")), criterios.correo().valor()));
+            }
+            if (criterios.numeroCuenta() != null) {
+                // Subconsulta sobre la tabla cuenta: evita exponer relaciones en la entidad y mantiene
+                // la busqueda por numero de cuenta en el mismo endpoint de filtros combinables.
+                Subquery<UUID> subconsulta = query.subquery(UUID.class);
+                Root<CuentaEntity> cuenta = subconsulta.from(CuentaEntity.class);
+                subconsulta.select(cuenta.get("clienteId"))
+                        .where(cb.equal(cuenta.get("numeroCuenta"), criterios.numeroCuenta().valor()));
+                predicados.add(root.get("id").in(subconsulta));
+            }
+            if (Boolean.TRUE.equals(criterios.soloActivos())) {
+                predicados.add(cb.isTrue(root.get("activo")));
+            }
+            if (Boolean.FALSE.equals(criterios.soloActivos())) {
+                predicados.add(cb.isFalse(root.get("activo")));
+            }
+            if (criterios.desde() != null) {
+                predicados.add(cb.greaterThanOrEqualTo(root.get("createdAt"), criterios.desde()));
+            }
+            if (criterios.hasta() != null) {
+                predicados.add(cb.lessThanOrEqualTo(root.get("createdAt"), criterios.hasta()));
+            }
+            if (cursor != null) {
+                predicados.add(cb.or(
+                        cb.lessThan(root.get("createdAt"), cursor.marcaTiempo()),
+                        cb.and(
+                                cb.equal(root.get("createdAt"), cursor.marcaTiempo()),
+                                cb.lessThan(root.get("id"), cursor.id()))));
+            }
+
+            return cb.and(predicados.toArray(new Predicate[0]));
+        };
     }
 
     @Override

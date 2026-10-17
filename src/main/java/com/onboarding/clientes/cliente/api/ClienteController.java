@@ -1,16 +1,18 @@
 package com.onboarding.clientes.cliente.api;
 
 import com.onboarding.clientes.cliente.api.request.ActualizarClienteRequest;
+import com.onboarding.clientes.cliente.api.request.ConsultaClienteRequest;
+import com.onboarding.clientes.cliente.api.request.IdentificacionRequest;
 import com.onboarding.clientes.cliente.api.request.RegistrarClienteRequest;
 import com.onboarding.clientes.cliente.application.command.ComandoActualizarCliente;
 import com.onboarding.clientes.cliente.application.command.ComandoRegistrarCliente;
 import com.onboarding.clientes.cliente.application.dto.ClienteDetalle;
 import com.onboarding.clientes.cliente.application.dto.ClienteResumen;
+import com.onboarding.clientes.cliente.application.query.ConsultaCliente;
 import com.onboarding.clientes.cliente.application.service.ServicioActualizacionCliente;
 import com.onboarding.clientes.cliente.application.service.ServicioBajaCliente;
 import com.onboarding.clientes.cliente.application.service.ServicioConsultaCliente;
 import com.onboarding.clientes.cliente.application.service.ServicioRegistroCliente;
-import com.onboarding.clientes.shared.web.Cursor;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -18,24 +20,23 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.time.LocalDate;
-import java.util.UUID;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Controlador REST para la gestion de clientes personas fisicas.
+ *
+ * <p>Sin {@code @PathVariable} ni {@code @RequestParam}: la identificacion del recurso y los criterios
+ * de busqueda viajan siempre en el cuerpo de la peticion mediante Request DTOs validados con
+ * {@code @Valid}. Toda la validacion de entrada y el manejo de errores vive en el dominio y en
+ * {@code ManejadorExcepcionesGlobales}: aqui no hay bloques try-catch ni validaciones repetidas.
  */
 @RestController
 @RequestMapping("/clientes")
@@ -115,64 +116,38 @@ public class ClienteController {
                 persona, contacto, ubicacion, laboral, credenciales, cuenta);
 
         ClienteDetalle detalle = servicioRegistro.registrar(comando);
-        return ResponseEntity.created(URI.create("/clientes/" + detalle.id())).body(detalle);
+        return ResponseEntity.created(URI.create("/clientes")).body(detalle);
     }
 
-    @GetMapping
-    @Operation(summary = "Listar clientes", description = "Consulta clientes con paginacion por cursor y filtros opcionales (activos o rango de fechas).")
-    public ResponseEntity<PaginaRespuesta<ClienteResumen>> listar(
-            @RequestParam(required = false, defaultValue = "false") boolean soloActivos,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
-            @RequestParam(required = false) String cursor,
-            @RequestParam(required = false) Integer limite) {
+    @PostMapping("/consulta")
+    @Operation(
+            summary = "Consultar clientes con filtros combinables",
+            description = "Un unico endpoint de busqueda: id, CURP, RFC, correo, numero de cuenta, estatus y rango de fechas pueden combinarse libremente. Con la paginacion por cursor se listan todos los clientes si no se envia ningun filtro.")
+    @ApiResponse(responseCode = "200", description = "Pagina de resultados (vacia si no hay coincidencias)")
+    @ApiResponse(responseCode = "400", description = "Criterios de busqueda invalidos")
+    public ResponseEntity<PaginaRespuesta<ClienteResumen>> consultar(@Valid @RequestBody ConsultaClienteRequest request) {
 
-        Cursor cursorObj = Cursor.decodificar(cursor);
+        ConsultaCliente consulta = new ConsultaCliente(
+                request.id(),
+                request.curp(),
+                request.rfc(),
+                request.correo(),
+                request.numeroCuenta(),
+                request.soloActivos(),
+                request.desde(),
+                request.hasta(),
+                request.cursor(),
+                request.limite());
 
-        PaginaRespuesta<ClienteResumen> respuesta;
-        if (desde != null && hasta != null) {
-            respuesta = servicioConsulta.listarRegistradosEntre(desde, hasta, cursorObj, limite);
-        } else {
-            respuesta = servicioConsulta.listar(cursorObj, limite, soloActivos);
-        }
-        return ResponseEntity.ok(respuesta);
+        return ResponseEntity.ok(servicioConsulta.buscar(consulta));
     }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Consultar cliente por ID")
-    public ResponseEntity<ClienteDetalle> buscarPorId(@PathVariable UUID id) {
-        return ResponseEntity.ok(servicioConsulta.buscarPorId(id));
-    }
-
-    @GetMapping("/curp/{curp}")
-    @Operation(summary = "Buscar cliente por CURP")
-    public ResponseEntity<ClienteDetalle> buscarPorCurp(@PathVariable String curp) {
-        return ResponseEntity.ok(servicioConsulta.buscarPorCurp(curp));
-    }
-
-    @GetMapping("/rfc/{rfc}")
-    @Operation(summary = "Buscar cliente por RFC")
-    public ResponseEntity<ClienteDetalle> buscarPorRfc(@PathVariable String rfc) {
-        return ResponseEntity.ok(servicioConsulta.buscarPorRfc(rfc));
-    }
-
-    @GetMapping("/correo/{correo}")
-    @Operation(summary = "Buscar cliente por correo electrónico")
-    public ResponseEntity<ClienteDetalle> buscarPorCorreo(@PathVariable String correo) {
-        return ResponseEntity.ok(servicioConsulta.buscarPorCorreo(correo));
-    }
-
-    @GetMapping("/cuenta/{numeroCuenta}")
-    @Operation(summary = "Buscar cliente por número de cuenta bancaria")
-    public ResponseEntity<ClienteDetalle> buscarPorNumeroCuenta(@PathVariable String numeroCuenta) {
-        return ResponseEntity.ok(servicioConsulta.buscarPorNumeroCuenta(numeroCuenta));
-    }
-
-    @PutMapping("/{id}")
-    @Operation(summary = "Actualizar información de cliente", description = "Actualiza datos personales, contacto, domicilio y laboral. Protege la inmutabilidad de CURP, RFC y cuenta.")
-    public ResponseEntity<ClienteDetalle> actualizar(
-            @PathVariable UUID id,
-            @Valid @RequestBody ActualizarClienteRequest request) {
+    @PutMapping
+    @Operation(summary = "Actualizar información de cliente", description = "Actualiza datos personales, contacto, domicilio y laboral del cliente identificado por el id del cuerpo. Protege la inmutabilidad de CURP, RFC y cuenta: el servidor ignora cualquier intento de modificacion de esos campos.")
+    @ApiResponse(responseCode = "200", description = "Cliente actualizado")
+    @ApiResponse(responseCode = "400", description = "Datos de entrada invalidos")
+    @ApiResponse(responseCode = "404", description = "Cliente inexistente")
+    public ResponseEntity<ClienteDetalle> actualizar(@Valid @RequestBody ActualizarClienteRequest request) {
 
         ComandoActualizarCliente.Persona persona = new ComandoActualizarCliente.Persona(
                 request.persona().nombre(),
@@ -207,15 +182,17 @@ public class ClienteController {
                 request.laboral().ingresoMensual(),
                 request.laboral().monedaIngreso());
 
-        ComandoActualizarCliente comando = new ComandoActualizarCliente(id, persona, contacto, ubicacion, laboral);
-        return ResponseEntity.ok(servicioActualizacion.actualizar(id, comando));
+        ComandoActualizarCliente comando = new ComandoActualizarCliente(request.id(), persona, contacto, ubicacion, laboral);
+        return ResponseEntity.ok(servicioActualizacion.actualizar(request.id(), comando));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Baja lógica de cliente", description = "Desactiva al cliente y en cascada a sus cuentas bancarias y usuario de acceso.")
-    public ResponseEntity<Void> darDeBaja(@PathVariable UUID id) {
-        servicioBaja.darDeBaja(id);
+    @Operation(summary = "Baja lógica de cliente", description = "Desactiva al cliente identificado por el id del cuerpo y en cascada a sus cuentas bancarias y usuario de acceso.")
+    @ApiResponse(responseCode = "204", description = "Cliente dado de baja")
+    @ApiResponse(responseCode = "404", description = "Cliente inexistente")
+    public ResponseEntity<Void> darDeBaja(@Valid @RequestBody IdentificacionRequest request) {
+        servicioBaja.darDeBaja(request.id());
         return ResponseEntity.noContent().build();
     }
 }

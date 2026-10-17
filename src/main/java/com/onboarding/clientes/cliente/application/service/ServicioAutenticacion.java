@@ -5,7 +5,9 @@ import com.onboarding.clientes.cliente.application.command.ComandoLogin;
 import com.onboarding.clientes.cliente.application.dto.LoginRespuesta;
 import com.onboarding.clientes.cliente.application.dto.UsuarioDto;
 import com.onboarding.clientes.cliente.application.mapper.ClienteMapeador;
+import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaUsuario;
 import com.onboarding.clientes.cliente.application.port.UsuarioRepositorio;
+import com.onboarding.clientes.cliente.application.query.ConsultaUsuario;
 import com.onboarding.clientes.cliente.domain.exception.ContraseniaInvalidaException;
 import com.onboarding.clientes.cliente.domain.exception.CredencialesInvalidasException;
 import com.onboarding.clientes.cliente.domain.exception.UsuarioBloqueadoException;
@@ -21,7 +23,10 @@ import com.onboarding.clientes.shared.id.UuidV7;
 import com.onboarding.clientes.shared.seguridad.GeneradorHash;
 import com.onboarding.clientes.shared.seguridad.PoliticaCredenciales;
 import com.onboarding.clientes.shared.tiempo.Reloj;
+import com.onboarding.clientes.shared.web.Cursor;
+import com.onboarding.clientes.shared.web.PaginaRespuesta;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -116,6 +121,38 @@ public class ServicioAutenticacion {
         return usuarios.buscarPorId(id)
                 .map(mapeador::aDto)
                 .orElseThrow(() -> new UsuarioNoEncontradoException(id));
+    }
+
+    /**
+     * Busqueda unificada de usuarios con filtros combinables: un unico punto de entrada para consultar
+     * por id, correo, cliente asociado o estatus, en cualquier combinacion.
+     */
+    @Transactional(readOnly = true)
+    public PaginaRespuesta<UsuarioDto> buscar(ConsultaUsuario consulta) {
+        int limite = normalizarLimite(consulta.limite());
+
+        CriteriosBusquedaUsuario criterios = new CriteriosBusquedaUsuario(
+                consulta.id(),
+                consulta.correo() != null && !consulta.correo().isBlank()
+                        ? Correo.de(consulta.correo())
+                        : null,
+                consulta.clienteId(),
+                consulta.activo());
+
+        List<Usuario> elementos = usuarios.buscar(criterios, Cursor.decodificar(consulta.cursor()), limite);
+        return PaginaRespuesta.construir(
+                elementos,
+                limite,
+                mapeador::aDto,
+                usuario -> new Cursor(usuario.createdAt(), usuario.id()));
+    }
+
+    private int normalizarLimite(Integer solicitado) {
+        PropiedadesOnboarding.Paginacion pag = propiedades.paginacion();
+        if (solicitado == null || solicitado <= 0) {
+            return pag.limitePorDefecto();
+        }
+        return Math.min(solicitado, pag.limiteMaximo());
     }
 
     @Transactional
