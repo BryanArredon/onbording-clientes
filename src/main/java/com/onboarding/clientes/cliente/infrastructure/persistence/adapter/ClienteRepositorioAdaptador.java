@@ -131,6 +131,8 @@ public class ClienteRepositorioAdaptador implements ClienteRepositorio {
             usuarioEntity.setActivo(u.activo());
             usuarioEntity.setIntentosFallidos(u.intentosFallidos());
             usuarioEntity.setBloqueadoHasta(u.bloqueadoHasta());
+            usuarioEntity.setIntentosFallidosPin(u.intentosFallidosPin());
+            usuarioEntity.setPinBloqueadoHasta(u.pinBloqueadoHasta());
             usuarioEntity.setUltimoAcceso(u.ultimoAcceso());
             usuarioEntity.setKeycloakSub(u.keycloakSub());
             usuarioEntity.setCreatedAt(u.createdAt());
@@ -323,6 +325,8 @@ public class ClienteRepositorioAdaptador implements ClienteRepositorio {
                         u.isActivo(),
                         u.getIntentosFallidos(),
                         u.getBloqueadoHasta(),
+                        u.getIntentosFallidosPin(),
+                        u.getPinBloqueadoHasta(),
                         u.getUltimoAcceso(),
                         u.getKeycloakSub(),
                         u.getCreatedAt(),

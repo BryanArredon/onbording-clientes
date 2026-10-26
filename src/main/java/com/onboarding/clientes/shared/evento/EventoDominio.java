@@ -30,6 +30,7 @@ public record EventoDominio(
     public static final String TIPO_CLIENTE = "cliente";
     public static final String TIPO_USUARIO = "usuario";
     public static final String TIPO_CUENTA = "cuenta";
+    public static final String TIPO_RETENCION = "retencion_cuenta";
 
     public static EventoDominio crear(
             String tipo, String agregadoTipo, UUID agregadoId, Map<String, Object> carga, String actor, Instant instante) {

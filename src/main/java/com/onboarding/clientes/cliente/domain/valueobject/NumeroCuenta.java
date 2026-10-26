@@ -60,6 +60,15 @@ public record NumeroCuenta(String valor) implements Comparable<NumeroCuenta> {
         return valor.compareTo(otro.valor);
     }
 
+    /**
+     * Devuelve el numero de cuenta enmascarado mostrando solo los ultimos 4 digitos.
+     *
+     * @return representacion segura para bitacoras y auditoria (ej. {@code ******0018})
+     */
+    public String enmascarado() {
+        return "******" + valor.substring(LONGITUD - 4);
+    }
+
     @Override
     public String toString() {
         return valor;

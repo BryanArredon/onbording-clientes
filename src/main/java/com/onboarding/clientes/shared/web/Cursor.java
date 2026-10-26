@@ -2,6 +2,7 @@ package com.onboarding.clientes.shared.web;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Base64;
 import java.util.UUID;
 
@@ -42,7 +43,7 @@ public record Cursor(Instant marcaTiempo, UUID id) {
                 throw new CursorInvalidoException(cursor);
             }
             return new Cursor(Instant.parse(crudo.substring(0, separador)), UUID.fromString(crudo.substring(separador + 1)));
-        } catch (IllegalArgumentException excepcion) {
+        } catch (IllegalArgumentException | DateTimeParseException excepcion) {
             throw new CursorInvalidoException(cursor);
         }
     }
