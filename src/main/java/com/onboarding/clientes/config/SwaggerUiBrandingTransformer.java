@@ -21,6 +21,7 @@ import org.springframework.web.servlet.resource.TransformedResource;
 public class SwaggerUiBrandingTransformer implements SwaggerIndexTransformer {
 
     static final String HOJA_ESTILOS = "/custom-swagger.css";
+    static final String SCRIPT_TEMA = "/custom-swagger.js";
     static final String FAVICON = "/favicon.png";
 
     private static final String PATRON_INDEX = "**/swagger-ui/**/index.html";
@@ -52,7 +53,8 @@ public class SwaggerUiBrandingTransformer implements SwaggerIndexTransformer {
         String branding = """
                 <link rel="icon" type="image/png" href="%s" />
                 <link rel="stylesheet" type="text/css" href="%s" />
-                </head>""".formatted(FAVICON, HOJA_ESTILOS);
+                <script src="%s" defer></script>
+                </head>""".formatted(FAVICON, HOJA_ESTILOS, SCRIPT_TEMA);
         String personalizado = html.replaceFirst("</head>", branding);
 
         return new TransformedResource(transformado, personalizado.getBytes(StandardCharsets.UTF_8));
