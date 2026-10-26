@@ -20,8 +20,11 @@ import java.util.UUID;
  */
 public class Usuario {
 
-    /** Numero maximo de intentos antes de bloquear la cuenta. */
+    /** Numero maximo de intentos de login antes de bloquear la cuenta. */
     public static final int MAX_INTENTOS = 5;
+
+    /** Numero maximo de intentos de PIN transaccional antes de bloquear el PIN. */
+    public static final int MAX_INTENTOS_PIN = 3;
 
     /** Duracion del bloqueo por intentos fallidos. */
     public static final Duration DURACION_BLOQUEO = Duration.ofMinutes(15);
@@ -35,6 +38,8 @@ public class Usuario {
     private boolean activo;
     private int intentosFallidos;
     private Instant bloqueadoHasta;
+    private int intentosFallidosPin;
+    private Instant pinBloqueadoHasta;
     private Instant ultimoAcceso;
     private String keycloakSub;
     private final Instant createdAt;
@@ -50,6 +55,8 @@ public class Usuario {
             boolean activo,
             int intentosFallidos,
             Instant bloqueadoHasta,
+            int intentosFallidosPin,
+            Instant pinBloqueadoHasta,
             Instant ultimoAcceso,
             String keycloakSub,
             Instant createdAt,
@@ -63,6 +70,8 @@ public class Usuario {
         this.activo = activo;
         this.intentosFallidos = intentosFallidos;
         this.bloqueadoHasta = bloqueadoHasta;
+        this.intentosFallidosPin = intentosFallidosPin;
+        this.pinBloqueadoHasta = pinBloqueadoHasta;
         this.ultimoAcceso = ultimoAcceso;
         this.keycloakSub = keycloakSub;
         this.createdAt = createdAt;
@@ -72,7 +81,21 @@ public class Usuario {
     /** Crea el usuario en el alta del cliente: activo, rol {@code CLIENTE} y sin PIN (el PIN es opcional). */
     public static Usuario crear(UUID clienteId, Correo correo, String hashContrasena, String hashPin, Instant momento) {
         return new Usuario(
-                UuidV7.generar(), clienteId, correo, RolUsuario.CLIENTE, hashContrasena, hashPin, true, 0, null, null, null, momento, momento);
+                UuidV7.generar(),
+                clienteId,
+                correo,
+                RolUsuario.CLIENTE,
+                hashContrasena,
+                hashPin,
+                true,
+                0,
+                null,
+                0,
+                null,
+                null,
+                null,
+                momento,
+                momento);
     }
 
     public static Usuario rehidratar(
@@ -89,6 +112,40 @@ public class Usuario {
             String keycloakSub,
             Instant createdAt,
             Instant updatedAt) {
+        return rehidratar(
+                id,
+                clienteId,
+                correo,
+                rol,
+                hashContrasena,
+                hashPin,
+                activo,
+                intentosFallidos,
+                bloqueadoHasta,
+                0,
+                null,
+                ultimoAcceso,
+                keycloakSub,
+                createdAt,
+                updatedAt);
+    }
+
+    public static Usuario rehidratar(
+            UUID id,
+            UUID clienteId,
+            Correo correo,
+            RolUsuario rol,
+            String hashContrasena,
+            String hashPin,
+            boolean activo,
+            int intentosFallidos,
+            Instant bloqueadoHasta,
+            int intentosFallidosPin,
+            Instant pinBloqueadoHasta,
+            Instant ultimoAcceso,
+            String keycloakSub,
+            Instant createdAt,
+            Instant updatedAt) {
         return new Usuario(
                 id,
                 clienteId,
@@ -99,6 +156,8 @@ public class Usuario {
                 activo,
                 intentosFallidos,
                 bloqueadoHasta,
+                intentosFallidosPin,
+                pinBloqueadoHasta,
                 ultimoAcceso,
                 keycloakSub,
                 createdAt,
@@ -119,10 +178,42 @@ public class Usuario {
             throw new ErrorNegocio(CodigoError.CONTRASENA_INVALIDA, "El hash de PIN es obligatorio");
         }
         this.hashPin = nuevoHash;
+        this.intentosFallidosPin = 0;
+        this.pinBloqueadoHasta = null;
     }
 
     public void quitarPin() {
         this.hashPin = null;
+        this.intentosFallidosPin = 0;
+        this.pinBloqueadoHasta = null;
+    }
+
+    /** Registra un intento fallido de PIN y bloquea el PIN tras alcanzar {@link #MAX_INTENTOS_PIN}. */
+    public void registrarIntentoFallidoPin(Instant momento) {
+        this.intentosFallidosPin++;
+        if (this.intentosFallidosPin >= MAX_INTENTOS_PIN) {
+            this.pinBloqueadoHasta = momento.plus(DURACION_BLOQUEO);
+        }
+        this.updatedAt = momento;
+    }
+
+    /** Reinicia el contador de intentos de PIN tras una autorizacion exitosa. */
+    public void registrarUsoExitosoPin(Instant momento) {
+        this.intentosFallidosPin = 0;
+        this.pinBloqueadoHasta = null;
+        this.updatedAt = momento;
+    }
+
+    public boolean estaPinBloqueado(Instant momento) {
+        return pinBloqueadoHasta != null && momento.isBefore(pinBloqueadoHasta);
+    }
+
+    public int intentosFallidosPin() {
+        return intentosFallidosPin;
+    }
+
+    public Instant pinBloqueadoHasta() {
+        return pinBloqueadoHasta;
     }
 
     /** Registra un intento de acceso fallido y bloquea la cuenta al superar el maximo permitido. */

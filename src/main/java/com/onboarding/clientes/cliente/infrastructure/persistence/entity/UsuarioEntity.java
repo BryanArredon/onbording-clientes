@@ -40,6 +40,12 @@ public class UsuarioEntity {
     @Column(name = "bloqueado_hasta")
     private Instant bloqueadoHasta;
 
+    @Column(name = "intentos_fallidos_pin", nullable = false)
+    private int intentosFallidosPin;
+
+    @Column(name = "pin_bloqueado_hasta")
+    private Instant pinBloqueadoHasta;
+
     @Column(name = "ultimo_acceso")
     private Instant ultimoAcceso;
 
@@ -72,6 +78,10 @@ public class UsuarioEntity {
     public void setIntentosFallidos(int intentosFallidos) { this.intentosFallidos = intentosFallidos; }
     public Instant getBloqueadoHasta() { return bloqueadoHasta; }
     public void setBloqueadoHasta(Instant bloqueadoHasta) { this.bloqueadoHasta = bloqueadoHasta; }
+    public int getIntentosFallidosPin() { return intentosFallidosPin; }
+    public void setIntentosFallidosPin(int intentosFallidosPin) { this.intentosFallidosPin = intentosFallidosPin; }
+    public Instant getPinBloqueadoHasta() { return pinBloqueadoHasta; }
+    public void setPinBloqueadoHasta(Instant pinBloqueadoHasta) { this.pinBloqueadoHasta = pinBloqueadoHasta; }
     public Instant getUltimoAcceso() { return ultimoAcceso; }
     public void setUltimoAcceso(Instant ultimoAcceso) { this.ultimoAcceso = ultimoAcceso; }
     public String getKeycloakSub() { return keycloakSub; }

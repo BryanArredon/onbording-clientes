@@ -27,18 +27,25 @@ public enum CodigoError {
     SALDO_INVALIDO("saldo_invalido", HttpStatus.UNPROCESSABLE_ENTITY),
     EDAD_MINIMA_NO_CUMPLIDA("edad_minima_no_cumplida", HttpStatus.UNPROCESSABLE_ENTITY),
 
-    // --- Cuenta ---
+    // --- Cuenta y Retenciones Bancarias ---
     CUENTA_NO_ENCONTRADA("cuenta_no_encontrada", HttpStatus.NOT_FOUND),
+    CUENTA_INACTIVA("cuenta_inactiva", HttpStatus.CONFLICT),
     CUENTA_SIN_CLIENTE_ACTIVO("cuenta_sin_cliente_activo", HttpStatus.UNPROCESSABLE_ENTITY),
     NUMERO_CUENTA_INVALIDO("numero_cuenta_invalido", HttpStatus.BAD_REQUEST),
+    SALDO_INSUFICIENTE("saldo_insuficiente", HttpStatus.UNPROCESSABLE_ENTITY),
+    RETENCION_NO_ENCONTRADA("retencion_no_encontrada", HttpStatus.NOT_FOUND),
+    ESTADO_RETENCION_INVALIDO("estado_retencion_invalido", HttpStatus.CONFLICT),
+    IDEMPOTENCIA_CONFLICTO("idempotencia_conflicto", HttpStatus.CONFLICT),
 
-    // --- Usuario / autenticacion ---
+    // --- Usuario / autenticacion / PIN ---
     USUARIO_NO_ENCONTRADO("usuario_no_encontrado", HttpStatus.NOT_FOUND),
     USUARIO_INACTIVO("usuario_inactivo", HttpStatus.FORBIDDEN),
     CREDENCIALES_INVALIDAS("credenciales_invalidas", HttpStatus.UNAUTHORIZED),
     CONTRASENA_INVALIDA("contrasena_invalida", HttpStatus.BAD_REQUEST),
     CORREO_DUPLICADO_USUARIO("correo_duplicado_usuario", HttpStatus.CONFLICT),
     PIN_NO_CONFIGURADO("pin_no_configurado", HttpStatus.UNPROCESSABLE_ENTITY),
+    PIN_INVALIDO("pin_invalido", HttpStatus.UNAUTHORIZED),
+    PIN_BLOQUEADO("pin_bloqueado", HttpStatus.LOCKED),
     USUARIO_BLOQUEADO("usuario_bloqueado", HttpStatus.LOCKED),
 
     // --- Tokens y dispositivos ---

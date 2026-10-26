@@ -1,6 +1,7 @@
 package com.onboarding.clientes.cliente.infrastructure.persistence.jpa;
 
 import com.onboarding.clientes.cliente.infrastructure.persistence.entity.CuentaEntity;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +9,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -36,4 +38,20 @@ public interface CuentaSpringDataRepository
             @Param("cursorTime") Instant cursorTime,
             @Param("cursorId") UUID cursorId,
             Pageable pageable);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE CuentaEntity c SET c.saldo = c.saldo - :montoTotal, c.version = c.version + 1, c.updatedAt = :ahora " +
+           "WHERE c.id = :cuentaId AND c.estatus = 'ACTIVA' AND c.saldo >= :montoTotal")
+    int descontarSaldoAtomico(
+            @Param("cuentaId") UUID cuentaId,
+            @Param("montoTotal") BigDecimal montoTotal,
+            @Param("ahora") Instant ahora);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE CuentaEntity c SET c.saldo = c.saldo + :montoTotal, c.version = c.version + 1, c.updatedAt = :ahora " +
+           "WHERE c.id = :cuentaId")
+    int abonarSaldoAtomico(
+            @Param("cuentaId") UUID cuentaId,
+            @Param("montoTotal") BigDecimal montoTotal,
+            @Param("ahora") Instant ahora);
 }

@@ -1,0 +1,13 @@
+package com.onboarding.clientes.cliente.infrastructure.persistence.jpa;
+
+import com.onboarding.clientes.cliente.infrastructure.persistence.entity.MovimientoContableEntity;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface MovimientoContableSpringDataRepository extends JpaRepository<MovimientoContableEntity, UUID> {
+
+    List<MovimientoContableEntity> findByRetencionIdOrderByCreatedAtAsc(UUID retencionId);
+}

@@ -11,6 +11,7 @@ import com.onboarding.clientes.cliente.infrastructure.persistence.jpa.CuentaSpri
 import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.web.Cursor;
 import jakarta.persistence.criteria.Predicate;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -39,8 +40,23 @@ public class CuentaRepositorioAdaptador implements CuentaRepositorio {
     }
 
     @Override
+    public Optional<Cuenta> buscarPorId(UUID id) {
+        return cuentaRepository.findById(id).map(this::aDominio);
+    }
+
+    @Override
     public Optional<Cuenta> buscarPorNumero(NumeroCuenta numero) {
         return cuentaRepository.findByNumeroCuenta(numero.valor()).map(this::aDominio);
+    }
+
+    @Override
+    public boolean descontarSaldoAtomico(UUID cuentaId, Dinero importe, Instant momento) {
+        return cuentaRepository.descontarSaldoAtomico(cuentaId, importe.monto(), momento) > 0;
+    }
+
+    @Override
+    public boolean abonarSaldoAtomico(UUID cuentaId, Dinero importe, Instant momento) {
+        return cuentaRepository.abonarSaldoAtomico(cuentaId, importe.monto(), momento) > 0;
     }
 
     @Override

@@ -4,10 +4,12 @@ import com.onboarding.clientes.cliente.application.dto.ClienteDetalle;
 import com.onboarding.clientes.cliente.application.dto.ClienteResumen;
 import com.onboarding.clientes.cliente.application.dto.CuentaDto;
 import com.onboarding.clientes.cliente.application.dto.DomicilioDto;
+import com.onboarding.clientes.cliente.application.dto.RetencionCuentaDto;
 import com.onboarding.clientes.cliente.application.dto.UsuarioDto;
 import com.onboarding.clientes.cliente.domain.model.Cliente;
 import com.onboarding.clientes.cliente.domain.model.Cuenta;
 import com.onboarding.clientes.cliente.domain.model.Domicilio;
+import com.onboarding.clientes.cliente.domain.model.RetencionCuenta;
 import com.onboarding.clientes.cliente.domain.model.Usuario;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -126,5 +128,25 @@ public class ClienteMapeador {
                 domicilio.estado(),
                 domicilio.codigoPostal(),
                 domicilio.pais());
+    }
+
+    public RetencionCuentaDto aDto(RetencionCuenta retencion) {
+        return new RetencionCuentaDto(
+                retencion.id(),
+                retencion.cuentaId(),
+                retencion.clienteId(),
+                retencion.numeroCuenta().valor(),
+                retencion.idempotencyKey(),
+                retencion.monto().monto(),
+                retencion.comision().monto(),
+                retencion.montoTotal().monto(),
+                retencion.monto().moneda(),
+                retencion.concepto(),
+                retencion.estado(),
+                retencion.referenciaExterna(),
+                retencion.motivoReverso(),
+                retencion.expiraEn(),
+                retencion.createdAt(),
+                retencion.updatedAt());
     }
 }

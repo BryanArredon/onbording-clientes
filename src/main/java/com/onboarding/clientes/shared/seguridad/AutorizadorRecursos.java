@@ -89,4 +89,29 @@ public class AutorizadorRecursos {
             throw new AccessDeniedException("El recurso no pertenece al usuario autenticado");
         }
     }
+
+    /**
+     * Exige que el usuario autenticado sea el titular de la cuenta (por {@code clienteId} o por correo
+     * electronico homologado en el JWT) o tenga rol {@code ADMIN}.
+     *
+     * @param clienteId identificador del cliente titular de la cuenta
+     * @param correoTitular correo electronico del titular de la cuenta
+     * @throws AccessDeniedException si el token no corresponde al titular ni a un administrador
+     */
+    public void exigeTitularCuentaOAdministrador(UUID clienteId, String correoTitular) {
+        UsuarioAutenticado usuario = usuarioActual();
+        if (usuario == null) {
+            throw new AccessDeniedException("No hay un usuario autenticado");
+        }
+        if (usuario.esAdministrador()) {
+            return;
+        }
+        boolean coincideClienteId = clienteId != null && clienteId.equals(usuario.clienteId());
+        boolean coincideCorreo = correoTitular != null
+                && usuario.correo() != null
+                && correoTitular.equalsIgnoreCase(usuario.correo());
+        if (!coincideClienteId && !coincideCorreo) {
+            throw new AccessDeniedException("La cuenta bancaria no pertenece al usuario autenticado");
+        }
+    }
 }

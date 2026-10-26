@@ -42,6 +42,8 @@ public class UsuarioRepositorioAdaptador implements UsuarioRepositorio {
         entity.setActivo(usuario.activo());
         entity.setIntentosFallidos(usuario.intentosFallidos());
         entity.setBloqueadoHasta(usuario.bloqueadoHasta());
+        entity.setIntentosFallidosPin(usuario.intentosFallidosPin());
+        entity.setPinBloqueadoHasta(usuario.pinBloqueadoHasta());
         entity.setUltimoAcceso(usuario.ultimoAcceso());
         entity.setKeycloakSub(usuario.keycloakSub());
         entity.setCreatedAt(usuario.createdAt());
@@ -54,6 +56,11 @@ public class UsuarioRepositorioAdaptador implements UsuarioRepositorio {
     @Override
     public Optional<Usuario> buscarPorId(UUID id) {
         return usuarioRepository.findById(id).map(this::aDominio);
+    }
+
+    @Override
+    public Optional<Usuario> buscarPorCliente(UUID clienteId) {
+        return usuarioRepository.findByClienteId(clienteId).map(this::aDominio);
     }
 
     @Override
@@ -125,6 +132,8 @@ public class UsuarioRepositorioAdaptador implements UsuarioRepositorio {
                 u.isActivo(),
                 u.getIntentosFallidos(),
                 u.getBloqueadoHasta(),
+                u.getIntentosFallidosPin(),
+                u.getPinBloqueadoHasta(),
                 u.getUltimoAcceso(),
                 u.getKeycloakSub(),
                 u.getCreatedAt(),

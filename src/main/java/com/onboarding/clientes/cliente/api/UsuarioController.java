@@ -1,8 +1,10 @@
 package com.onboarding.clientes.cliente.api;
 
 import com.onboarding.clientes.cliente.api.request.CambiarPasswordRequest;
+import com.onboarding.clientes.cliente.api.request.CambiarPinRequest;
 import com.onboarding.clientes.cliente.api.request.ConsultaUsuarioRequest;
 import com.onboarding.clientes.cliente.application.command.ComandoCambiarPassword;
+import com.onboarding.clientes.cliente.application.command.ComandoCambiarPin;
 import com.onboarding.clientes.cliente.application.dto.UsuarioDto;
 import com.onboarding.clientes.cliente.application.query.ConsultaUsuario;
 import com.onboarding.clientes.cliente.application.service.ServicioAutenticacion;
@@ -65,6 +67,22 @@ public class UsuarioController {
         ComandoCambiarPassword comando = new ComandoCambiarPassword(
                 request.usuarioId(), request.contraseniaActual(), request.nuevaContrasenia());
         servicioAutenticacion.cambiarContrasenia(comando);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/pin")
+    @Operation(
+            summary = "Configurar o actualizar el PIN de autorizacion de 4 digitos",
+            description = "Valida la contrasena actual del usuario y cifra con BCrypt (coste 12) el nuevo PIN de 4 digitos numericos, reiniciando el contador de intentos fallidos de PIN.")
+    @ApiResponse(responseCode = "204", description = "PIN actualizado")
+    @ApiResponse(responseCode = "400", description = "PIN invalido (debe ser de 4 digitos)")
+    @ApiResponse(responseCode = "401", description = "Contrasena actual incorrecta")
+    @ApiResponse(responseCode = "404", description = "Usuario inexistente")
+    public ResponseEntity<Void> cambiarPin(@Valid @RequestBody CambiarPinRequest request) {
+
+        ComandoCambiarPin comando = new ComandoCambiarPin(
+                request.usuarioId(), request.contraseniaActual(), request.nuevoPin());
+        servicioAutenticacion.cambiarPin(comando);
         return ResponseEntity.noContent().build();
     }
 }

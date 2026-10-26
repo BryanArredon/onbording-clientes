@@ -1,5 +1,6 @@
 package com.onboarding.clientes.shared.error;
 
+import com.onboarding.clientes.shared.web.Cursor.CursorInvalidoException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -99,6 +100,16 @@ public class ManejadorExcepcionesGlobales {
     @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
     public ResponseEntity<ProblemDetail> manejarParametroInvalido(Exception error, HttpServletRequest peticion) {
         return responder(CodigoError.SOLICITUD_INVALIDA, "Parametro de la peticion invalido", ruta(peticion), null);
+    }
+
+    @ExceptionHandler(CursorInvalidoException.class)
+    public ResponseEntity<ProblemDetail> manejarCursorInvalido(
+            CursorInvalidoException error, HttpServletRequest peticion) {
+        return responder(
+                CodigoError.SOLICITUD_INVALIDA,
+                "El cursor de paginacion no es valido; omita el campo o envie null en la primera consulta",
+                ruta(peticion),
+                null);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -235,7 +246,10 @@ public class ManejadorExcepcionesGlobales {
             return CodigoError.CLIENTE_YA_REGISTRADO;
         }
         if (mensaje.contains("ck_cuenta_saldo_no_negativo")) {
-            return CodigoError.SALDO_INVALIDO;
+            return CodigoError.SALDO_INSUFICIENTE;
+        }
+        if (mensaje.contains("uq_retencion_cuenta_idempotencia")) {
+            return CodigoError.CONFLICTO_CONCURRENTE;
         }
         return CodigoError.ERROR_INTERNO;
     }
