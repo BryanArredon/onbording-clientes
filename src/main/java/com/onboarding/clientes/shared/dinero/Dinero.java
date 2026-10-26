@@ -39,7 +39,7 @@ public record Dinero(BigDecimal monto, String moneda) implements Comparable<Dine
         if (monto.signum() < 0) {
             throw new ErrorNegocio(CodigoError.SALDO_INVALIDO, "El monto no puede ser negativo");
         }
-        monto = monto.setScale(ESCALA, RoundingMode.HALF_UP);
+        monto = monto.setScale(ESCALA, RoundingMode.HALF_EVEN);
     }
 
     public static Dinero cero(String moneda) {
@@ -75,6 +75,16 @@ public record Dinero(BigDecimal monto, String moneda) implements Comparable<Dine
     public boolean esMayorQue(Dinero otro) {
         exigeMismaMoneda(otro);
         return monto.compareTo(otro.monto) > 0;
+    }
+
+    public boolean esMayorOIgualQue(Dinero otro) {
+        exigeMismaMoneda(otro);
+        return monto.compareTo(otro.monto) >= 0;
+    }
+
+    public boolean esMenorQue(Dinero otro) {
+        exigeMismaMoneda(otro);
+        return monto.compareTo(otro.monto) < 0;
     }
 
     @Override
