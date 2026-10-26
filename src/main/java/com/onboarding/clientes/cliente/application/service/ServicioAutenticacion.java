@@ -1,6 +1,7 @@
 package com.onboarding.clientes.cliente.application.service;
 
 import com.onboarding.clientes.cliente.application.command.ComandoCambiarPassword;
+import com.onboarding.clientes.cliente.application.command.ComandoCambiarPin;
 import com.onboarding.clientes.cliente.application.command.ComandoLogin;
 import com.onboarding.clientes.cliente.application.dto.LoginRespuesta;
 import com.onboarding.clientes.cliente.application.dto.UsuarioDto;
@@ -198,5 +199,39 @@ public class ServicioAutenticacion {
                 reloj.ahora()));
 
         LOGGER.info("Contrasena actualizada exitosamente para el usuario id={}", usuario.id());
+    }
+
+    @Transactional
+    public void cambiarPin(ComandoCambiarPin comando) {
+        autorizador.exigeUsuarioPropietarioOAdministrador(comando.usuarioId());
+        Usuario usuario = usuarios.buscarPorId(comando.usuarioId())
+                .orElseThrow(() -> new UsuarioNoEncontradoException(comando.usuarioId()));
+
+        if (!usuario.activo()) {
+            throw new UsuarioInactivoException(usuario.correo().valor());
+        }
+
+        if (!generadorHash.coincide(comando.contraseniaActual(), usuario.hashContrasena())) {
+            throw new CredencialesInvalidasException();
+        }
+
+        PoliticaCredenciales.validarPin(comando.nuevoPin(), 4, 4);
+        PoliticaCredenciales.exigePinDistintoDeContrasena(comando.nuevoPin(), comando.contraseniaActual());
+
+        Instant ahora = reloj.ahora();
+        String nuevoHash = generadorHash.hash(comando.nuevoPin());
+        usuario.establecerPin(nuevoHash);
+        usuario.marcarActualizada(ahora);
+        usuarios.guardar(usuario);
+
+        publicadorEvento.publicar(EventoDominio.crear(
+                "usuario.pin_actualizado",
+                EventoDominio.TIPO_USUARIO,
+                usuario.id(),
+                Map.of("usuarioId", usuario.id().toString()),
+                "sistema",
+                ahora));
+
+        LOGGER.info("PIN de autorizacion actualizado exitosamente para el usuario id={}", usuario.id());
     }
 }
