@@ -49,15 +49,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (SecurityContextHolder.getContext().getAuthentication() == null
                         && jwtTokenService.esTokenValido(token)) {
                     Claims claims = jwtTokenService.extraerClaims(token);
-                    UUID usuarioId = UUID.fromString(claims.getSubject());
-                    UUID clienteId = claims.get("clienteId", String.class) != null
-                            ? UUID.fromString(claims.get("clienteId", String.class))
-                            : null;
+                    String subject = claims.getSubject();
+                    UUID usuarioId = parsearUuidSeguro(subject);
+                    UUID clienteId = parsearUuidSeguro(claims.get("clienteId", String.class));
+                    String correoClaim = claims.get("correo", String.class);
+                    String correo = (correoClaim != null && !correoClaim.isBlank())
+                            ? correoClaim.trim()
+                            : (usuarioId == null && subject != null ? subject.trim() : null);
                     RolUsuario rol = claims.get("rol", String.class) != null
                             ? RolUsuario.valueOf(claims.get("rol", String.class))
                             : rolDesdeAuthorities(claims);
 
-                    UsuarioAutenticado principal = new UsuarioAutenticado(usuarioId, clienteId, rol);
+                    UsuarioAutenticado principal = new UsuarioAutenticado(usuarioId, clienteId, rol, correo);
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
                     authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
@@ -69,6 +72,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private static UUID parsearUuidSeguro(String valor) {
+        if (valor == null || valor.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(valor.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** Compatibilidad con tokens antiguos: si no trae el claim {@code rol} lo deduce de {@code roles}. */

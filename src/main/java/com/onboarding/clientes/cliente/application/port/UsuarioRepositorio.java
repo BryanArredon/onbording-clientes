@@ -19,6 +19,8 @@ public interface UsuarioRepositorio {
 
     Optional<Usuario> buscarPorId(UUID id);
 
+    Optional<Usuario> buscarPorCliente(UUID clienteId);
+
     Optional<Usuario> buscarPorCorreo(Correo correo);
 
     boolean existePorCorreo(Correo correo);

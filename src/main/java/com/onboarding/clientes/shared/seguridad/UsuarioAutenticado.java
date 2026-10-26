@@ -14,12 +14,16 @@ import org.springframework.security.core.userdetails.UserDetails;
  * puedan autorizar cada operacion sobre el recurso correcto sin volver a tocar la base de datos
  * (prevencion de IDOR: el cliente autenticado solo puede tocar sus propios recursos).
  */
-public record UsuarioAutenticado(UUID usuarioId, UUID clienteId, RolUsuario rol) implements UserDetails {
+public record UsuarioAutenticado(UUID usuarioId, UUID clienteId, RolUsuario rol, String correo) implements UserDetails {
 
     public UsuarioAutenticado {
         if (rol == null) {
             rol = RolUsuario.CLIENTE;
         }
+    }
+
+    public UsuarioAutenticado(UUID usuarioId, UUID clienteId, RolUsuario rol) {
+        this(usuarioId, clienteId, rol, null);
     }
 
     public boolean esAdministrador() {
@@ -38,7 +42,10 @@ public record UsuarioAutenticado(UUID usuarioId, UUID clienteId, RolUsuario rol)
 
     @Override
     public String getUsername() {
-        return usuarioId != null ? usuarioId.toString() : null;
+        if (usuarioId != null) {
+            return usuarioId.toString();
+        }
+        return correo;
     }
 
     @Override
