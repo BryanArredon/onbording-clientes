@@ -3,7 +3,9 @@ package com.onboarding.clientes.cliente.application.port;
 import com.onboarding.clientes.cliente.domain.model.Cuenta;
 import com.onboarding.clientes.cliente.domain.model.EstatusCuenta;
 import com.onboarding.clientes.cliente.domain.valueobject.NumeroCuenta;
+import com.onboarding.clientes.shared.dinero.Dinero;
 import com.onboarding.clientes.shared.web.Cursor;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,7 +23,24 @@ public interface CuentaRepositorio {
      */
     NumeroCuenta siguienteNumero();
 
+    Optional<Cuenta> buscarPorId(UUID id);
+
     Optional<Cuenta> buscarPorNumero(NumeroCuenta numero);
+
+    /**
+     * Descuenta de forma atomica el importe indicado solo si la cuenta esta ACTIVA y su saldo es
+     * mayor o igual al importe.
+     *
+     * @return {@code true} si el descuento se aplico; {@code false} si el saldo fue insuficiente o no estaba activa
+     */
+    boolean descontarSaldoAtomico(UUID cuentaId, Dinero importe, Instant momento);
+
+    /**
+     * Abona de forma atomica el importe indicado (movimiento compensatorio de reverso).
+     *
+     * @return {@code true} si el abono se aplico
+     */
+    boolean abonarSaldoAtomico(UUID cuentaId, Dinero importe, Instant momento);
 
     List<Cuenta> buscarPorCliente(UUID clienteId);
 
