@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # ==============================================================================
 # Etapa 1: Build con Maven y Eclipse Temurin 21
 # ==============================================================================
@@ -11,7 +13,7 @@ COPY pom.xml .
 # 2. Descargar dependencias en modo offline
 RUN mvn dependency:go-offline -B || true
 
-# 3. Copiar codigo fuente y compilar artefacto
+# 3. Copiar código fuente y compilar artefacto
 COPY src ./src
 RUN mvn clean package -DskipTests -B
 
@@ -22,8 +24,11 @@ FROM eclipse-temurin:21-jre-alpine AS runner
 
 WORKDIR /app
 
-# Crear usuario no privilegiado
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Instalar tzdata para zona horaria de México y crear usuario sin privilegios
+RUN apk add --no-cache tzdata \
+    && cp /usr/share/zoneinfo/America/Mexico_City /etc/localtime \
+    && echo "America/Mexico_City" > /etc/timezone \
+    && addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Copiar el jar compilado desde el builder
 COPY --from=builder /build/target/onboarding-clientes.jar app.jar
@@ -32,15 +37,15 @@ COPY --from=builder /build/target/onboarding-clientes.jar app.jar
 RUN chown -R appuser:appgroup /app
 USER appuser
 
-# Exponer el puerto del servicio
-EXPOSE 8080
+# Exponer el puerto del microservicio (por defecto 8082)
+EXPOSE 8082
 
 # Variables de entorno por defecto
-# GC serial + RAM acotada: el plan Free de Render es solo 512 MiB, ZGC no cabe
 ENV SPRING_PROFILES_ACTIVE=prod \
-    JAVA_OPTS="-XX:+UseSerialGC -XX:MaxRAMPercentage=45.0 -XX:InitialRAMPercentage=20.0 -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError"
+    TZ="America/Mexico_City" \
+    JAVA_OPTS="-XX:+UseSerialGC -XX:MaxRAMPercentage=45.0 -XX:InitialRAMPercentage=20.0 -XX:MaxMetaspaceSize=128m -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8 -Duser.timezone=America/Mexico_City"
 
-# Healthcheck usando Actuator (Render inyecta $PORT, ej. 10000)
+# Healthcheck usando Actuator
 HEALTHCHECK --interval=30s --timeout=5s --start-period=50s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider "http://localhost:${PORT:-8082}/actuator/health" || exit 1
 
