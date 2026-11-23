@@ -11,4 +11,5 @@ public record LoginRespuesta(
         long expiresIn,
         UUID clienteId,
         UUID usuarioId,
-        RolUsuario rol) {}
+        RolUsuario rol,
+        UUID sesionId) {}

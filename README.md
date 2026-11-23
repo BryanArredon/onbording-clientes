@@ -154,10 +154,15 @@ sequenceDiagram
 | :--- | :--- | :--- | :--- |
 | `POST` | `/clientes` | Alta integral de cliente, domicilio, cuenta y usuario | Público |
 | `POST` | `/clientes/consulta` | Único endpoint de búsqueda: id, CURP, RFC, correo, número de cuenta, estatus y rango de fechas combinables + paginación por cursor | Autenticado |
+| `POST` | `/clientes/detalle` | Detalle completo de un cliente (id en el cuerpo): personales, contacto, domicilio, laboral, cuenta y usuario | Autenticado |
 | `PUT` | `/clientes` | Actualizar cliente (id en el cuerpo; protección de inmutabilidad de CURP/RFC) | Autenticado |
 | `DELETE`| `/clientes` | Baja lógica de cliente (id en el cuerpo; inactiva cuentas y usuario en cascada) | Autenticado |
 | `POST` | `/cuentas/consulta` | Único endpoint de búsqueda de cuentas (número de cuenta y/o cliente); la respuesta incluye el saldo disponible | Autenticado |
-| `POST` | `/auth/login` | Inicio de sesión con correo y contraseña (Emite JWT) | Público |
+| `POST` | `/auth/login` | Primer factor: correo y contraseña → desafío 2FA (incluye QR `otpauth://` la primera vez) | Público |
+| `POST` | `/auth/mfa/verificar` | Segundo factor TOTP → abre sesión y emite JWT con `sid`. `409 sesion_activa` si hay otra sesión; repetir con `cerrarSesionAnterior=true` | Público |
+| `POST` | `/auth/renovar` | Nuevo token sobre la misma sesión (inactividad 15 min, máximo 8 h) | Autenticado |
+| `POST` | `/auth/logout` | Revoca la sesión en servidor | Autenticado |
+| `POST` | `/auth/sesion` | Introspección de la sesión (la usa `api-gesto-pago`) | Autenticado |
 | `POST` | `/usuarios/consulta` | Único endpoint de búsqueda de usuarios: id, correo, cliente asociado y estatus combinables | Autenticado |
 | `PUT` | `/usuarios/password` | Cambio de contraseña con validación de complejidad (id en el cuerpo) | Autenticado |
 

@@ -248,6 +248,9 @@ public class ManejadorExcepcionesGlobales {
         if (mensaje.contains("ck_cuenta_saldo_no_negativo")) {
             return CodigoError.SALDO_INSUFICIENTE;
         }
+        if (mensaje.contains("ux_sesion_usuario_vigente")) {
+            return CodigoError.CONFLICTO_CONCURRENTE;
+        }
         if (mensaje.contains("uq_retencion_cuenta_idempotencia")) {
             return CodigoError.CONFLICTO_CONCURRENTE;
         }

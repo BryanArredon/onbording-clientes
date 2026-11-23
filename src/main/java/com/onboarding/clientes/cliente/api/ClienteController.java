@@ -142,6 +142,17 @@ public class ClienteController {
         return ResponseEntity.ok(servicioConsulta.buscar(consulta));
     }
 
+    @PostMapping("/detalle")
+    @Operation(
+            summary = "Consultar el detalle completo de un cliente",
+            description = "Devuelve datos personales, contacto, domicilio, informacion laboral, cuenta y usuario del cliente identificado por el id del cuerpo.")
+    @ApiResponse(responseCode = "200", description = "Detalle del cliente")
+    @ApiResponse(responseCode = "403", description = "El cliente no pertenece al usuario autenticado")
+    @ApiResponse(responseCode = "404", description = "Cliente inexistente")
+    public ResponseEntity<ClienteDetalle> detalle(@Valid @RequestBody IdentificacionRequest request) {
+        return ResponseEntity.ok(servicioConsulta.buscarPorId(request.id()));
+    }
+
     @PutMapping
     @Operation(summary = "Actualizar información de cliente", description = "Actualiza datos personales, contacto, domicilio y laboral del cliente identificado por el id del cuerpo. Protege la inmutabilidad de CURP, RFC y cuenta: el servidor ignora cualquier intento de modificacion de esos campos.")
     @ApiResponse(responseCode = "200", description = "Cliente actualizado")

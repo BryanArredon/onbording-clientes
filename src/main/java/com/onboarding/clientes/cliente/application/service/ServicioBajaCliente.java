@@ -1,8 +1,10 @@
 package com.onboarding.clientes.cliente.application.service;
 
 import com.onboarding.clientes.cliente.application.port.ClienteRepositorio;
+import com.onboarding.clientes.cliente.application.port.UsuarioRepositorio;
 import com.onboarding.clientes.cliente.domain.exception.ClienteNoEncontradoException;
 import com.onboarding.clientes.cliente.domain.model.Cliente;
+import com.onboarding.clientes.cliente.domain.model.MotivoRevocacion;
 import com.onboarding.clientes.shared.evento.EventoDominio;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
 import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
@@ -27,16 +29,22 @@ public class ServicioBajaCliente {
     private final PublicadorEvento publicadorEvento;
     private final Reloj reloj;
     private final AutorizadorRecursos autorizador;
+    private final UsuarioRepositorio usuarios;
+    private final ServicioSesiones servicioSesiones;
 
     public ServicioBajaCliente(
             ClienteRepositorio clientes,
             PublicadorEvento publicadorEvento,
             Reloj reloj,
-            AutorizadorRecursos autorizador) {
+            AutorizadorRecursos autorizador,
+            UsuarioRepositorio usuarios,
+            ServicioSesiones servicioSesiones) {
         this.clientes = clientes;
         this.publicadorEvento = publicadorEvento;
         this.reloj = reloj;
         this.autorizador = autorizador;
+        this.usuarios = usuarios;
+        this.servicioSesiones = servicioSesiones;
     }
 
     @Transactional
@@ -48,6 +56,9 @@ public class ServicioBajaCliente {
         Instant momento = reloj.ahora();
         cliente.darDeBaja(momento);
         clientes.guardar(cliente);
+        // La baja invalida en servidor la sesion abierta: el token emitido deja de servir de inmediato.
+        usuarios.buscarPorCliente(cliente.id())
+                .ifPresent(usuario -> servicioSesiones.revocarDeUsuario(usuario.id(), MotivoRevocacion.BAJA));
 
         publicadorEvento.publicar(EventoDominio.crear(
                 "cliente.dado_de_baja",

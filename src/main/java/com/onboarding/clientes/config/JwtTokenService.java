@@ -42,22 +42,73 @@ public class JwtTokenService {
         this.duracionRefreshSegundos = propiedades.token().duracionRefresh().toSeconds();
     }
 
-    public String generarAccessToken(Usuario usuario) {
+    /** Audiencia del token de acceso: es la unica que autentica peticiones a la API. */
+    public static final String AUDIENCIA_ACCESO = "onboarding-api";
+    /** Audiencia del token intermedio entre la contrasena y el segundo factor. */
+    public static final String AUDIENCIA_MFA = "onboarding-mfa";
+    public static final String CLAIM_SESION = "sid";
+    private static final long DURACION_DESAFIO_SEGUNDOS = 300;
+
+    /**
+     * Token de acceso ligado a una sesion de servidor (claim {@code sid}). Aunque la firma y la
+     * expiracion sean validas, el token deja de servir en cuanto la sesion se revoca.
+     */
+    public String generarAccessToken(Usuario usuario, UUID sesionId) {
         Instant ahora = Instant.now();
         Instant expira = ahora.plusSeconds(duracionAccesoSegundos);
-
         return Jwts.builder()
+                .setId(UUID.randomUUID().toString())
                 .setSubject(usuario.id().toString())
                 .setIssuer(emisor)
-                .setAudience("onboarding-api")
+                .setAudience(AUDIENCIA_ACCESO)
                 .setIssuedAt(Date.from(ahora))
                 .setExpiration(Date.from(expira))
+                .claim(CLAIM_SESION, sesionId.toString())
                 .claim("clienteId", usuario.clienteId().toString())
                 .claim("correo", usuario.correo().valor())
                 .claim("rol", usuario.rol().name())
                 .claim("roles", List.of(usuario.rol().autoridad()))
                 .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    /**
+     * Token de corta vida que acredita que la contrasena ya se valido y falta el segundo factor. No
+     * autentica ninguna peticion (su audiencia no es {@link #AUDIENCIA_ACCESO}).
+     */
+    public String generarTokenDesafio(Usuario usuario, String canal) {
+        Instant ahora = Instant.now();
+        return Jwts.builder()
+                .setId(UUID.randomUUID().toString())
+                .setSubject(usuario.id().toString())
+                .setIssuer(emisor)
+                .setAudience(AUDIENCIA_MFA)
+                .setIssuedAt(Date.from(ahora))
+                .setExpiration(Date.from(ahora.plusSeconds(DURACION_DESAFIO_SEGUNDOS)))
+                .claim("canal", canal)
+                .signWith(signingKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    /** @return claims del desafio, o vacio si la firma, la audiencia o la expiracion no son validas */
+    public java.util.Optional<Claims> validarTokenDesafio(String token) {
+        try {
+            Claims claims = extraerClaims(token);
+            if (!AUDIENCIA_MFA.equals(claims.getAudience()) || !emisor.equals(claims.getIssuer())) {
+                return java.util.Optional.empty();
+            }
+            return java.util.Optional.of(claims);
+        } catch (Exception e) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    public long getDuracionDesafioSegundos() {
+        return DURACION_DESAFIO_SEGUNDOS;
+    }
+
+    public String getEmisor() {
+        return emisor;
     }
 
     public String generarRefreshToken(Usuario usuario, UUID familiaId) {
@@ -87,7 +138,10 @@ public class JwtTokenService {
     public boolean esTokenValido(String token) {
         try {
             Claims claims = extraerClaims(token);
-            return !claims.getExpiration().before(new Date());
+            // Solo la audiencia de acceso autentica: un token de refresco o de desafio MFA no sirve aqui.
+            boolean audienciaValida = AUDIENCIA_ACCESO.equals(claims.getAudience())
+                    || !emisor.equals(claims.getIssuer());
+            return audienciaValida && !claims.getExpiration().before(new Date());
         } catch (Exception e) {
             return false;
         }

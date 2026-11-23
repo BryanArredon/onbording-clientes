@@ -2,14 +2,23 @@ package com.onboarding.clientes.cliente.application.service;
 
 import com.onboarding.clientes.cliente.application.command.ComandoCambiarPassword;
 import com.onboarding.clientes.cliente.application.command.ComandoLogin;
+import com.onboarding.clientes.cliente.application.command.ComandoVerificarMfa;
+import com.onboarding.clientes.cliente.application.dto.DesafioMfaRespuesta;
 import com.onboarding.clientes.cliente.application.dto.LoginRespuesta;
 import com.onboarding.clientes.cliente.application.dto.UsuarioDto;
 import com.onboarding.clientes.cliente.application.mapper.ClienteMapeador;
 import com.onboarding.clientes.cliente.application.port.CriteriosBusquedaUsuario;
+import com.onboarding.clientes.cliente.application.port.FactorTotpRepositorio;
 import com.onboarding.clientes.cliente.application.port.UsuarioRepositorio;
 import com.onboarding.clientes.cliente.application.query.ConsultaUsuario;
+import com.onboarding.clientes.cliente.domain.exception.CodigoMfaInvalidoException;
 import com.onboarding.clientes.cliente.domain.exception.CredencialesInvalidasException;
+import com.onboarding.clientes.cliente.domain.exception.DesafioMfaInvalidoException;
+import com.onboarding.clientes.cliente.domain.exception.SesionActivaException;
 import com.onboarding.clientes.cliente.domain.exception.UsuarioInactivoException;
+import com.onboarding.clientes.cliente.domain.model.CanalSesion;
+import com.onboarding.clientes.cliente.domain.model.FactorTotp;
+import com.onboarding.clientes.cliente.domain.model.Sesion;
 import com.onboarding.clientes.cliente.domain.model.Usuario;
 import com.onboarding.clientes.cliente.domain.valueobject.Correo;
 import com.onboarding.clientes.config.JwtTokenService;
@@ -17,6 +26,10 @@ import com.onboarding.clientes.config.PropiedadesOnboarding;
 import com.onboarding.clientes.cliente.domain.model.RolUsuario;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
 import com.onboarding.clientes.shared.seguridad.AutorizadorRecursos;
+import com.onboarding.clientes.shared.seguridad.CifradorSecretos;
+import com.onboarding.clientes.shared.seguridad.Totp;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.impl.DefaultClaims;
 import com.onboarding.clientes.shared.seguridad.GeneradorHash;
 import com.onboarding.clientes.shared.tiempo.Reloj;
 import com.onboarding.clientes.shared.web.PaginaRespuesta;
@@ -39,6 +52,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -60,6 +75,12 @@ class ServicioAutenticacionTest {
     private Reloj reloj;
     @Mock
     private AutorizadorRecursos autorizador;
+    @Mock
+    private FactorTotpRepositorio factores;
+    @Mock
+    private ServicioSesiones servicioSesiones;
+
+    private final CifradorSecretos cifrador = new CifradorSecretos("clave-de-pruebas-unitarias-0123456789abcdef");
 
     private ServicioAutenticacion servicio;
     private final Instant momento = Instant.parse("2026-01-01T12:00:00Z");
@@ -82,7 +103,10 @@ class ServicioAutenticacionTest {
                 publicadorEvento,
                 reloj,
                 props,
-                autorizador);
+                autorizador,
+                factores,
+                cifrador,
+                servicioSesiones);
 
         // Por defecto los tests actuan con un administrador sin alcance restringido
         lenient().when(autorizador.clienteIdPermitido()).thenReturn(null);
@@ -92,25 +116,141 @@ class ServicioAutenticacionTest {
     }
 
     @Test
-    @DisplayName("Debe autenticar correctamente con credenciales válidas")
-    void debeAutenticarCorrectamente() {
-        UUID clienteId = UUID.randomUUID();
-        Correo correo = Correo.de("alejandro.morales@fintechmail.com");
-        Usuario usuario = Usuario.crear(clienteId, correo, "$2a$12$hashedPassword", null, momento);
-
-        when(usuarios.buscarPorCorreo(correo)).thenReturn(Optional.of(usuario));
+    @DisplayName("La contraseña correcta no entrega token: exige el segundo factor")
+    void loginExigeSegundoFactor() {
+        Usuario usuario = usuarioDePrueba();
+        when(usuarios.buscarPorCorreo(usuario.correo())).thenReturn(Optional.of(usuario));
         when(generadorHash.coincide("Segura123!", "$2a$12$hashedPassword")).thenReturn(true);
-        when(jwtTokenService.generarAccessToken(any())).thenReturn("mocked.access.jwt");
-        when(jwtTokenService.generarRefreshToken(any(), any())).thenReturn("mocked.refresh.jwt");
-        when(jwtTokenService.getDuracionAccesoSegundos()).thenReturn(900L);
+        when(jwtTokenService.generarTokenDesafio(any(), eq("WEB"))).thenReturn("desafio.jwt");
+        when(factores.buscarPorUsuario(usuario.id()))
+                .thenReturn(Optional.of(FactorTotp.rehidratar(usuario.id(), cifrador.cifrar(SECRETO), true, 0, momento)));
 
-        ComandoLogin comando = new ComandoLogin("alejandro.morales@fintechmail.com", "Segura123!", "127.0.0.1", "Postman");
-        LoginRespuesta respuesta = servicio.login(comando);
+        DesafioMfaRespuesta respuesta = servicio.login(comandoLogin("Segura123!"));
 
-        assertThat(respuesta).isNotNull();
-        assertThat(respuesta.accessToken()).isEqualTo("mocked.access.jwt");
-        assertThat(respuesta.refreshToken()).isEqualTo("mocked.refresh.jwt");
-        assertThat(respuesta.clienteId()).isEqualTo(clienteId);
+        assertThat(respuesta.estado()).isEqualTo(DesafioMfaRespuesta.CODIGO_REQUERIDO);
+        assertThat(respuesta.tokenDesafio()).isEqualTo("desafio.jwt");
+        assertThat(respuesta.otpauthUri()).isNull();
+        verify(jwtTokenService, never()).generarAccessToken(any(), any());
+    }
+
+    @Test
+    @DisplayName("Sin factor confirmado el login devuelve el QR de enrolamiento con la semilla cifrada en reposo")
+    void loginSinFactorIniciaEnrolamiento() {
+        Usuario usuario = usuarioDePrueba();
+        when(usuarios.buscarPorCorreo(usuario.correo())).thenReturn(Optional.of(usuario));
+        when(generadorHash.coincide("Segura123!", "$2a$12$hashedPassword")).thenReturn(true);
+        when(jwtTokenService.generarTokenDesafio(any(), any())).thenReturn("desafio.jwt");
+        when(factores.buscarPorUsuario(usuario.id())).thenReturn(Optional.empty());
+
+        DesafioMfaRespuesta respuesta = servicio.login(comandoLogin("Segura123!"));
+
+        assertThat(respuesta.estado()).isEqualTo(DesafioMfaRespuesta.ENROLAMIENTO_REQUERIDO);
+        assertThat(respuesta.otpauthUri()).startsWith("otpauth://totp/Gesto%20Pago:").contains("secret=" + respuesta.secreto());
+        verify(factores).guardar(argThat(f -> !f.confirmado()
+                && !f.secretoCifrado().contains(respuesta.secreto())
+                && cifrador.descifrar(f.secretoCifrado()).equals(respuesta.secreto())));
+    }
+
+    @Test
+    @DisplayName("Un código TOTP válido abre la sesión y emite el token ligado a ella")
+    void segundoFactorValidoAbreSesion() {
+        Usuario usuario = usuarioDePrueba();
+        prepararDesafio(usuario);
+        FactorTotp factor = FactorTotp.rehidratar(usuario.id(), cifrador.cifrar(SECRETO), false, 0, momento);
+        when(factores.buscarPorUsuario(usuario.id())).thenReturn(Optional.of(factor));
+        Sesion sesion = Sesion.abrir(usuario.id(), CanalSesion.WEB, "127.0.0.1", "test", momento, Duration.ofHours(8));
+        when(servicioSesiones.abrir(eq(usuario.id()), eq(CanalSesion.WEB), any(), any(), eq(false))).thenReturn(sesion);
+        when(jwtTokenService.generarAccessToken(usuario, sesion.id())).thenReturn("access.jwt");
+
+        LoginRespuesta respuesta = servicio.verificarSegundoFactor(comandoMfa(codigoActual(), false));
+
+        assertThat(respuesta.accessToken()).isEqualTo("access.jwt");
+        assertThat(respuesta.sesionId()).isEqualTo(sesion.id());
+        assertThat(factor.confirmado()).isTrue();
+        assertThat(factor.ultimoPaso()).isEqualTo(Totp.pasoDe(momento));
+    }
+
+    @Test
+    @DisplayName("Un código ya utilizado se rechaza (anti-replay) y cuenta como intento fallido")
+    void codigoReutilizadoSeRechaza() {
+        Usuario usuario = usuarioDePrueba();
+        prepararDesafio(usuario);
+        long pasoUsado = Totp.pasoDe(momento) + 1;
+        when(factores.buscarPorUsuario(usuario.id())).thenReturn(Optional.of(
+                FactorTotp.rehidratar(usuario.id(), cifrador.cifrar(SECRETO), true, pasoUsado, momento)));
+
+        assertThatThrownBy(() -> servicio.verificarSegundoFactor(comandoMfa(codigoActual(), false)))
+                .isInstanceOf(CodigoMfaInvalidoException.class);
+        assertThat(usuario.intentosFallidos()).isEqualTo(1);
+        verify(servicioSesiones, never()).abrir(any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("Cinco códigos incorrectos bloquean al usuario igual que las contraseñas")
+    void codigosIncorrectosBloquean() {
+        Usuario usuario = usuarioDePrueba();
+        prepararDesafio(usuario);
+        when(factores.buscarPorUsuario(usuario.id())).thenReturn(Optional.of(
+                FactorTotp.rehidratar(usuario.id(), cifrador.cifrar(SECRETO), true, 0, momento)));
+
+        for (int i = 0; i < Usuario.MAX_INTENTOS; i++) {
+            assertThatThrownBy(() -> servicio.verificarSegundoFactor(comandoMfa("000000", false)))
+                    .isInstanceOf(CodigoMfaInvalidoException.class);
+        }
+        assertThat(usuario.estaBloqueado(momento)).isTrue();
+    }
+
+    @Test
+    @DisplayName("Con otra sesión vigente responde sesion_activa sin consumir el código")
+    void sesionActivaNoConsumeCodigo() {
+        Usuario usuario = usuarioDePrueba();
+        prepararDesafio(usuario);
+        FactorTotp factor = FactorTotp.rehidratar(usuario.id(), cifrador.cifrar(SECRETO), true, 0, momento);
+        when(factores.buscarPorUsuario(usuario.id())).thenReturn(Optional.of(factor));
+        Sesion movil = Sesion.abrir(usuario.id(), CanalSesion.MOVIL, "10.0.0.1", "app", momento, Duration.ofHours(8));
+        when(servicioSesiones.abrir(any(), any(), any(), any(), eq(false))).thenThrow(new SesionActivaException(movil));
+
+        assertThatThrownBy(() -> servicio.verificarSegundoFactor(comandoMfa(codigoActual(), false)))
+                .isInstanceOf(SesionActivaException.class);
+        assertThat(factor.ultimoPaso()).isZero();
+        verify(factores, never()).guardar(any());
+    }
+
+    @Test
+    @DisplayName("Un desafío inválido o expirado se rechaza")
+    void desafioInvalido() {
+        when(jwtTokenService.validarTokenDesafio("caducado")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.verificarSegundoFactor(
+                new ComandoVerificarMfa("caducado", "123456", false, "127.0.0.1", "test")))
+                .isInstanceOf(DesafioMfaInvalidoException.class);
+    }
+
+    private static final String SECRETO = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+
+    private Usuario usuarioDePrueba() {
+        return Usuario.crear(UUID.randomUUID(), Correo.de("alejandro.morales@fintechmail.com"),
+                "$2a$12$hashedPassword", null, momento);
+    }
+
+    private void prepararDesafio(Usuario usuario) {
+        Claims claims = new DefaultClaims();
+        claims.setSubject(usuario.id().toString());
+        claims.put("canal", "WEB");
+        when(jwtTokenService.validarTokenDesafio("desafio.jwt")).thenReturn(Optional.of(claims));
+        when(usuarios.buscarPorId(usuario.id())).thenReturn(Optional.of(usuario));
+    }
+
+    private String codigoActual() {
+        return Totp.codigo(SECRETO, Totp.pasoDe(momento));
+    }
+
+    private ComandoVerificarMfa comandoMfa(String codigo, boolean cerrarAnterior) {
+        return new ComandoVerificarMfa("desafio.jwt", codigo, cerrarAnterior, "127.0.0.1", "test");
+    }
+
+    private ComandoLogin comandoLogin(String contrasenia) {
+        return new ComandoLogin("alejandro.morales@fintechmail.com", contrasenia, "127.0.0.1", "Postman");
     }
 
     @Test
@@ -206,18 +346,14 @@ class ServicioAutenticacionTest {
     @Test
     @DisplayName("Debe devolver el rol del usuario en el resultado del login")
     void loginDevuelveRol() {
-        UUID clienteId = UUID.randomUUID();
-        Correo correo = Correo.de("alejandro.morales@fintechmail.com");
-        Usuario usuario = Usuario.crear(clienteId, correo, "$2a$12$hashedPassword", null, momento);
+        Usuario usuario = usuarioDePrueba();
+        prepararDesafio(usuario);
+        when(factores.buscarPorUsuario(usuario.id())).thenReturn(Optional.of(
+                FactorTotp.rehidratar(usuario.id(), cifrador.cifrar(SECRETO), true, 0, momento)));
+        Sesion sesion = Sesion.abrir(usuario.id(), CanalSesion.WEB, null, null, momento, Duration.ofHours(8));
+        when(servicioSesiones.abrir(any(), any(), any(), any(), anyBoolean())).thenReturn(sesion);
 
-        when(usuarios.buscarPorCorreo(correo)).thenReturn(Optional.of(usuario));
-        when(generadorHash.coincide("Segura123!", "$2a$12$hashedPassword")).thenReturn(true);
-        when(jwtTokenService.generarAccessToken(any())).thenReturn("mocked.access.jwt");
-        when(jwtTokenService.generarRefreshToken(any(), any())).thenReturn("mocked.refresh.jwt");
-        when(jwtTokenService.getDuracionAccesoSegundos()).thenReturn(900L);
-
-        LoginRespuesta respuesta = servicio.login(
-                new ComandoLogin("alejandro.morales@fintechmail.com", "Segura123!", "127.0.0.1", "Postman"));
+        LoginRespuesta respuesta = servicio.verificarSegundoFactor(comandoMfa(codigoActual(), false));
 
         assertThat(respuesta.rol()).isEqualTo(RolUsuario.CLIENTE);
     }

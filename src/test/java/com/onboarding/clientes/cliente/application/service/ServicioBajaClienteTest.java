@@ -1,6 +1,7 @@
 package com.onboarding.clientes.cliente.application.service;
 
 import com.onboarding.clientes.cliente.application.port.ClienteRepositorio;
+import com.onboarding.clientes.cliente.application.port.UsuarioRepositorio;
 import com.onboarding.clientes.cliente.domain.exception.ClienteNoEncontradoException;
 import com.onboarding.clientes.cliente.domain.model.AltaCliente;
 import com.onboarding.clientes.cliente.domain.model.Cliente;
@@ -10,6 +11,7 @@ import com.onboarding.clientes.cliente.domain.model.DatosPersonales;
 import com.onboarding.clientes.cliente.domain.model.Domicilio;
 import com.onboarding.clientes.cliente.domain.model.EstadoCivil;
 import com.onboarding.clientes.cliente.domain.model.EstatusCuenta;
+import com.onboarding.clientes.cliente.domain.model.MotivoRevocacion;
 import com.onboarding.clientes.cliente.domain.model.Sexo;
 import com.onboarding.clientes.cliente.domain.model.TipoCuenta;
 import com.onboarding.clientes.cliente.domain.model.Usuario;
@@ -55,6 +57,10 @@ class ServicioBajaClienteTest {
     private Reloj reloj;
     @Mock
     private AutorizadorRecursos autorizador;
+    @Mock
+    private UsuarioRepositorio usuarios;
+    @Mock
+    private ServicioSesiones servicioSesiones;
 
     private ServicioBajaCliente servicio;
     private final Instant momento = Instant.parse("2026-01-01T12:00:00Z");
@@ -63,7 +69,7 @@ class ServicioBajaClienteTest {
 
     @BeforeEach
     void setUp() {
-        servicio = new ServicioBajaCliente(clientes, publicadorEvento, reloj, autorizador);
+        servicio = new ServicioBajaCliente(clientes, publicadorEvento, reloj, autorizador, usuarios, servicioSesiones);
 
         UUID id = UUID.randomUUID();
         LocalDate nacimiento = LocalDate.of(1992, 8, 14);
@@ -100,6 +106,20 @@ class ServicioBajaClienteTest {
         assertThat(clienteEjemplo.cuenta().orElseThrow().estatus()).isEqualTo(EstatusCuenta.INACTIVA);
         verify(clientes).guardar(clienteEjemplo);
         verify(publicadorEvento).publicar(any());
+    }
+
+    @Test
+    @DisplayName("La baja revoca en servidor la sesión abierta del cliente")
+    void bajaRevocaSesion() {
+        Usuario usuario = Usuario.crear(clienteEjemplo.id(), Correo.de("alejandro.morales@fintechmail.com"),
+                "$2a$12$hash", null, momento);
+        when(clientes.buscarPorId(clienteEjemplo.id())).thenReturn(Optional.of(clienteEjemplo));
+        when(reloj.ahora()).thenReturn(momento);
+        when(usuarios.buscarPorCliente(clienteEjemplo.id())).thenReturn(Optional.of(usuario));
+
+        servicio.darDeBaja(clienteEjemplo.id());
+
+        verify(servicioSesiones).revocarDeUsuario(usuario.id(), MotivoRevocacion.BAJA);
     }
 
     @Test

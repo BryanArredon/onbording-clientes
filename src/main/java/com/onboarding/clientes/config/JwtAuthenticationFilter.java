@@ -2,6 +2,8 @@ package com.onboarding.clientes.config;
 
 import com.onboarding.clientes.cliente.domain.model.RolUsuario;
 import com.onboarding.clientes.shared.seguridad.UsuarioAutenticado;
+import com.onboarding.clientes.cliente.application.service.ServicioSesiones;
+import com.onboarding.clientes.shared.error.CodigoError;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -27,11 +29,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    /** Atributo de la peticion con el id de la sesion (UUID) del token autenticado. */
+    public static final String ATRIBUTO_SESION = "onboarding.sesionId";
+    /** Atributo con el codigo de error cuando el token es valido pero su sesion ya no lo es. */
+    public static final String ATRIBUTO_MOTIVO_RECHAZO = "onboarding.motivoRechazo";
 
     private final JwtTokenService jwtTokenService;
+    private final ServicioSesiones servicioSesiones;
 
-    public JwtAuthenticationFilter(JwtTokenService jwtTokenService) {
+    public JwtAuthenticationFilter(JwtTokenService jwtTokenService, ServicioSesiones servicioSesiones) {
         this.jwtTokenService = jwtTokenService;
+        this.servicioSesiones = servicioSesiones;
     }
 
     @Override
@@ -60,6 +68,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             ? RolUsuario.valueOf(claims.get("rol", String.class))
                             : rolDesdeAuthorities(claims);
 
+                    // Los tokens propios estan ligados a una sesion de servidor: si se revoco (logout, baja,
+                    // acceso desde otro canal) o vencio por inactividad, el token deja de autenticar.
+                    if (jwtTokenService.getEmisor().equals(claims.getIssuer())) {
+                        UUID sesionId = parsearUuidSeguro(claims.get(JwtTokenService.CLAIM_SESION, String.class));
+                        ServicioSesiones.Estado estado = sesionId == null || usuarioId == null
+                                ? ServicioSesiones.Estado.REVOCADA
+                                : servicioSesiones.validar(sesionId, usuarioId);
+                        if (estado != ServicioSesiones.Estado.VIGENTE) {
+                            request.setAttribute(ATRIBUTO_MOTIVO_RECHAZO, estado == ServicioSesiones.Estado.EXPIRADA
+                                    ? CodigoError.SESION_EXPIRADA
+                                    : CodigoError.SESION_REVOCADA);
+                            throw new SesionNoVigente();
+                        }
+                        request.setAttribute(ATRIBUTO_SESION, sesionId);
+                    }
+
                     UsuarioAutenticado principal = new UsuarioAutenticado(usuarioId, clienteId, rol, correo);
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
@@ -72,6 +96,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /** Corta la autenticacion de la peticion; la captura el bloque que continua sin principal. */
+    private static final class SesionNoVigente extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+
+        SesionNoVigente() {
+            super(null, null, false, false);
+        }
     }
 
     private static UUID parsearUuidSeguro(String valor) {
