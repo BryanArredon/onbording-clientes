@@ -195,7 +195,8 @@ public class ServicioAutenticacion {
                 EventoDominio.TIPO_USUARIO,
                 usuario.id(),
                 Map.of("canal", canal.name(),
-                        "ipOrigen", comando.ipOrigen() != null ? comando.ipOrigen() : "desconocida"),
+                        "ipOrigen", comando.ipOrigen() != null ? comando.ipOrigen() : "desconocida",
+                        "dispositivo", comando.dispositivo() != null ? comando.dispositivo() : "desconocido"),
                 "sistema",
                 ahora));
         LOGGER.info("Login exitoso (2FA) usuario id={} canal={}", usuario.id(), canal);

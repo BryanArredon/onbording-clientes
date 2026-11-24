@@ -6,6 +6,7 @@ import com.onboarding.clientes.cliente.infrastructure.persistence.jpa.EventoDomi
 import com.onboarding.clientes.shared.evento.EventoDominio;
 import com.onboarding.clientes.shared.evento.PublicadorEvento;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,10 +21,15 @@ public class PublicadorEventoSpringData implements PublicadorEvento {
 
     private final EventoDominioSpringDataRepository repository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public PublicadorEventoSpringData(EventoDominioSpringDataRepository repository, ObjectMapper objectMapper) {
+    public PublicadorEventoSpringData(
+            EventoDominioSpringDataRepository repository,
+            ObjectMapper objectMapper,
+            ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -40,6 +46,7 @@ public class PublicadorEventoSpringData implements PublicadorEvento {
             entity.setCreadoEn(evento.instante());
 
             repository.save(entity);
+            eventPublisher.publishEvent(evento);
             LOGGER.debug("Evento de dominio persistido: tipo={} agregadoId={}", evento.tipo(), evento.agregadoId());
         } catch (Exception e) {
             LOGGER.error("Error al persistir evento de dominio: {}", evento.tipo(), e);
