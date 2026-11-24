@@ -39,20 +39,7 @@ public record NumeroCuenta(String valor) implements Comparable<NumeroCuenta> {
     }
 
     private static boolean digitoVerificadorValido(String numero) {
-        int suma = 0;
-        for (int i = 0; i < LONGITUD; i++) {
-            int digito = Character.digit(numero.charAt(i), 10);
-            // Se duplica el digito en las posiciones impares contando desde la derecha.
-            boolean duplicar = (LONGITUD - i) % 2 == 0;
-            if (duplicar) {
-                digito *= 2;
-                if (digito > 9) {
-                    digito -= 9;
-                }
-            }
-            suma += digito;
-        }
-        return suma % 10 == 0;
+        return ValidadorLuhn.esLuhnValido(numero);
     }
 
     @Override

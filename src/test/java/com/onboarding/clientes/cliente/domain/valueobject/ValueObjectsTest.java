@@ -84,6 +84,17 @@ class ValueObjectsTest {
             assertThatThrownBy(() -> NumeroCuenta.de("12345"))
                     .isInstanceOf(ErrorNegocio.class);
         }
+
+        @Test
+        @DisplayName("Debe validar y generar tarjetas de 16 dígitos con algoritmo de Luhn")
+        void tarjetaLuhnGeneracionYValidacion() {
+            String tarjeta = ValidadorLuhn.generarTarjeta("453201", 16);
+            assertThat(tarjeta).hasSize(16);
+            assertThat(ValidadorLuhn.esTarjetaValida(tarjeta)).isTrue();
+            assertThat(ValidadorLuhn.obtenerFranquicia(tarjeta)).isEqualTo(ValidadorLuhn.FranquiciaTarjeta.VISA);
+            assertThat(ValidadorLuhn.formatearTarjeta(tarjeta)).matches("^\\d{4} \\d{4} \\d{4} \\d{4}$");
+            assertThat(ValidadorLuhn.enmascararTarjeta(tarjeta)).matches("^\\*\\*\\*\\* \\*\\*\\*\\* \\*\\*\\*\\* \\d{4}$");
+        }
     }
 
     @Nested
